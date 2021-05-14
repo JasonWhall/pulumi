@@ -84,9 +84,9 @@ export class Component extends pulumi.ComponentResource {
 export interface ComponentArgs {
     a: boolean;
     b?: boolean;
-    bar?: inputs.Foo;
-    baz?: inputs.Foo[];
-    bazMap?: {[key: string]: inputs.Foo};
+    bar?: inputs.FooArgs;
+    baz?: inputs.FooArgs[];
+    bazMap?: {[key: string]: inputs.FooArgs};
     c: number;
     d?: number;
     e: string;

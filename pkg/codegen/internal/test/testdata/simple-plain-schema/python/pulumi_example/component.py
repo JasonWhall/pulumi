@@ -19,9 +19,9 @@ class ComponentArgs:
                  c: int,
                  e: str,
                  b: Optional[bool] = None,
-                 bar: Optional['Foo'] = None,
-                 baz: Optional[Sequence['Foo']] = None,
-                 baz_map: Optional[Mapping[str, 'Foo']] = None,
+                 bar: Optional['FooArgs'] = None,
+                 baz: Optional[Sequence['FooArgs']] = None,
+                 baz_map: Optional[Mapping[str, 'FooArgs']] = None,
                  d: Optional[int] = None,
                  f: Optional[str] = None,
                  foo: Optional[pulumi.Input['FooArgs']] = None):
@@ -84,20 +84,20 @@ class ComponentArgs:
 
     @property
     @pulumi.getter
-    def bar(self) -> Optional['Foo']:
+    def bar(self) -> Optional['FooArgs']:
         return pulumi.get(self, "bar")
 
     @bar.setter
-    def bar(self, value: Optional['Foo']):
+    def bar(self, value: Optional['FooArgs']):
         pulumi.set(self, "bar", value)
 
     @property
     @pulumi.getter
-    def baz(self) -> Optional[Sequence['Foo']]:
+    def baz(self) -> Optional[Sequence['FooArgs']]:
         return pulumi.get(self, "baz")
 
     @baz.setter
-    def baz(self, value: Optional[Sequence['Foo']]):
+    def baz(self, value: Optional[Sequence['FooArgs']]):
         pulumi.set(self, "baz", value)
 
     @property
@@ -144,9 +144,9 @@ class Component(pulumi.ComponentResource):
                  opts: Optional[pulumi.ResourceOptions] = None,
                  a: Optional[bool] = None,
                  b: Optional[bool] = None,
-                 bar: Optional[pulumi.InputType['Foo']] = None,
-                 baz: Optional[Sequence[pulumi.InputType['Foo']]] = None,
-                 baz_map: Optional[Mapping[str, pulumi.InputType['Foo']]] = None,
+                 bar: Optional[pulumi.InputType['FooArgs']] = None,
+                 baz: Optional[Sequence[pulumi.InputType['FooArgs']]] = None,
+                 baz_map: Optional[Mapping[str, pulumi.InputType['FooArgs']]] = None,
                  c: Optional[int] = None,
                  d: Optional[int] = None,
                  e: Optional[str] = None,
@@ -183,9 +183,9 @@ class Component(pulumi.ComponentResource):
                  opts: Optional[pulumi.ResourceOptions] = None,
                  a: Optional[bool] = None,
                  b: Optional[bool] = None,
-                 bar: Optional[pulumi.InputType['Foo']] = None,
-                 baz: Optional[Sequence[pulumi.InputType['Foo']]] = None,
-                 baz_map: Optional[Mapping[str, pulumi.InputType['Foo']]] = None,
+                 bar: Optional[pulumi.InputType['FooArgs']] = None,
+                 baz: Optional[Sequence[pulumi.InputType['FooArgs']]] = None,
+                 baz_map: Optional[Mapping[str, pulumi.InputType['FooArgs']]] = None,
                  c: Optional[int] = None,
                  d: Optional[int] = None,
                  e: Optional[str] = None,
