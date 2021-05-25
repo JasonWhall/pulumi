@@ -103,6 +103,14 @@ func TestGeneratePackage(t *testing.T) {
 				filepath.Join("pulumi_example", "pet.py"),
 			},
 		},
+		{
+			"Repro for #6957",
+			"plain-schema-gh6957",
+			[]string{
+				filepath.Join("pulumi_xyz", "_inputs.py"),
+				filepath.Join("pulumi_xyz", "static_page.py"),
+			},
+		},
 	}
 
 	testDir := filepath.Join("..", "internal", "test", "testdata")
