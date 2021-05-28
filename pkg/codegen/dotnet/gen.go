@@ -53,7 +53,6 @@ type typeDetails struct {
 	outputType bool
 	inputType  bool
 	stateType  bool
-	argsType   bool
 	plainType  bool
 }
 
@@ -1279,7 +1278,9 @@ func visitObjectTypes(properties []*schema.Property, visitor func(*schema.Object
 	})
 }
 
-func (mod *modContext) genType(w io.Writer, obj *schema.ObjectType, propertyTypeQualifier string, input, state, args bool, level int) error {
+func (mod *modContext) genType(w io.Writer, obj *schema.ObjectType, propertyTypeQualifier string, input, state bool, level int) error {
+	args := obj.IsInputShape()
+
 	pt := &plainType{
 		mod:                   mod,
 		name:                  mod.typeName(obj, state, input, args),
@@ -1660,20 +1661,16 @@ func (mod *modContext) gen(fs fs) error {
 			fmt.Fprintf(buffer, "namespace %s\n", mod.tokenToNamespace(t.Token, "Inputs"))
 			fmt.Fprintf(buffer, "{\n")
 
-			name := tokenToName(t.Token)
-			if mod.details(t).argsType {
-				name += "Args"
-				if err := mod.genType(buffer, t, "Inputs", true, false, true, 1); err != nil {
-					return err
-				}
+			if err := mod.genType(buffer, t, "Inputs", true, false, 1); err != nil {
+				return err
 			}
-			if mod.details(t).plainType {
-				if err := mod.genType(buffer, t, "Inputs", true, false, false, 1); err != nil {
-					return err
-				}
-			}
+
 			fmt.Fprintf(buffer, "}\n")
 
+			name := tokenToName(t.Token)
+			if t.IsInputShape() {
+				name += "Args"
+			}
 			addFile(path.Join("Inputs", name+".cs"), buffer.String())
 		}
 		if mod.details(t).stateType {
@@ -1682,7 +1679,7 @@ func (mod *modContext) gen(fs fs) error {
 
 			fmt.Fprintf(buffer, "namespace %s\n", mod.tokenToNamespace(t.Token, "Inputs"))
 			fmt.Fprintf(buffer, "{\n")
-			if err := mod.genType(buffer, t, "Inputs", true, true, true, 1); err != nil {
+			if err := mod.genType(buffer, t, "Inputs", true, true, 1); err != nil {
 				return err
 			}
 			fmt.Fprintf(buffer, "}\n")
@@ -1695,7 +1692,7 @@ func (mod *modContext) gen(fs fs) error {
 
 			fmt.Fprintf(buffer, "namespace %s\n", mod.tokenToNamespace(t.Token, "Outputs"))
 			fmt.Fprintf(buffer, "{\n")
-			if err := mod.genType(buffer, t, "Outputs", false, false, false, 1); err != nil {
+			if err := mod.genType(buffer, t, "Outputs", false, false, 1); err != nil {
 				return err
 			}
 			fmt.Fprintf(buffer, "}\n")
@@ -1898,7 +1895,6 @@ func generateModuleContextMap(tool string, pkg *schema.Package) (map[string]*mod
 				getModFromToken(t.Token, t.Package).details(t).outputType = true
 			}
 			getModFromToken(t.Token, t.Package).details(t).inputType = true
-			getModFromToken(t.Token, t.Package).details(t).argsType = true
 		})
 		if r.StateInputs != nil {
 			visitObjectTypes(r.StateInputs.Properties, func(t *schema.ObjectType) {
