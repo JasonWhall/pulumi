@@ -209,8 +209,7 @@ func (mod *modContext) typeString(t schema.Type, input bool, constValue interfac
 	case *schema.OptionalType:
 		return mod.typeString(t.ElementType, input, constValue) + " | undefined"
 	case *schema.InputType:
-		t = codegen.SimplifyInputUnion(t)
-		typ := mod.typeString(t.ElementType, input, constValue)
+		typ := mod.typeString(codegen.SimplifyInputUnion(t.ElementType), input, constValue)
 		if typ == "any" {
 			return typ
 		}

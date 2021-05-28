@@ -10,7 +10,7 @@ using Pulumi.Serialization;
 namespace Pulumi.Example.Inputs
 {
 
-    public sealed class FooArgs : Pulumi.ResourceArgs
+    public sealed class Foo : Pulumi.InvokeArgs
     {
         [Input("a", required: true)]
         public bool A { get; set; }
@@ -30,7 +30,7 @@ namespace Pulumi.Example.Inputs
         [Input("f")]
         public string? F { get; set; }
 
-        public FooArgs()
+        public Foo()
         {
         }
     }

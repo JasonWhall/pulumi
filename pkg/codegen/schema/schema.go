@@ -84,7 +84,7 @@ func (primitiveType) isType() {}
 // IsPrimitiveType returns true if the given Type is a primitive type. The primitive types are bool, int, number,
 // string, archive, asset, and any.
 func IsPrimitiveType(t Type) bool {
-	_, ok := t.(primitiveType)
+	_, ok := plainType(t).(primitiveType)
 	return ok
 }
 

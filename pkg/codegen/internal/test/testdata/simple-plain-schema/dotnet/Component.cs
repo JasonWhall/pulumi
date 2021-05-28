@@ -77,10 +77,10 @@ namespace Pulumi.Example
         public Inputs.FooArgs? Bar { get; set; }
 
         [Input("baz")]
-        private List<Inputs.FooArgs>? _baz;
-        public List<Inputs.FooArgs> Baz
+        private List<Input<Inputs.FooArgs>>? _baz;
+        public List<Input<Inputs.FooArgs>> Baz
         {
-            get => _baz ?? (_baz = new List<Inputs.FooArgs>());
+            get => _baz ?? (_baz = new List<Input<Inputs.FooArgs>>());
             set => _baz = value;
         }
 

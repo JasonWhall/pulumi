@@ -1865,8 +1865,7 @@ func (mod *modContext) typeString(t schema.Type, input, acceptMapping bool) stri
 	case *schema.OptionalType:
 		return fmt.Sprintf("Optional[%s]", mod.typeString(t.ElementType, input, acceptMapping))
 	case *schema.InputType:
-		t = codegen.SimplifyInputUnion(t)
-		typ := mod.typeString(t.ElementType, input, acceptMapping)
+		typ := mod.typeString(codegen.SimplifyInputUnion(t.ElementType), input, acceptMapping)
 		if typ == "Any" {
 			return typ
 		}

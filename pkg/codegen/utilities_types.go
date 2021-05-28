@@ -37,8 +37,8 @@ func VisitTypeClosure(properties []*schema.Property, visitor func(t schema.Type)
 	}
 }
 
-func SimplifyInputUnion(t *schema.InputType) *schema.InputType {
-	union, ok := t.ElementType.(*schema.UnionType)
+func SimplifyInputUnion(t schema.Type) schema.Type {
+	union, ok := t.(*schema.UnionType)
 	if !ok {
 		return t
 	}
@@ -49,12 +49,12 @@ func SimplifyInputUnion(t *schema.InputType) *schema.InputType {
 			elements[i] = input.ElementType
 		}
 	}
-	return &schema.InputType{ElementType: &schema.UnionType{
+	return &schema.UnionType{
 		ElementTypes:  elements,
 		DefaultType:   union.DefaultType,
 		Discriminator: union.Discriminator,
 		Mapping:       union.Mapping,
-	}}
+	}
 }
 
 // RequiredType unwraps the OptionalType enclosing the Property's type, if any.
@@ -71,4 +71,18 @@ func OptionalType(p *schema.Property) schema.Type {
 		return optional
 	}
 	return &schema.OptionalType{ElementType: p.Type}
+}
+
+// UnwrapType removes any outer OptionalTypes and InputTypes from t.
+func UnwrapType(t schema.Type) schema.Type {
+	for {
+		switch typ := t.(type) {
+		case *schema.InputType:
+			t = typ.ElementType
+		case *schema.OptionalType:
+			t = typ.ElementType
+		default:
+			return t
+		}
+	}
 }
