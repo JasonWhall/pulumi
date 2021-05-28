@@ -206,12 +206,26 @@ type ObjectType struct {
 	// Language specifies additional language-specific data about the object type.
 	Language map[string]interface{}
 
-	// InputShape is the input shape for this object. May be nil.
+	// InputShape is the input shape for this object. Only valid if IsPlainShape returns true.
 	InputShape *ObjectType
-	// PlainShape is the plain shape for this object. May be nil.
+	// PlainShape is the plain shape for this object. Only valid if IsInputShape returns true.
 	PlainShape *ObjectType
 
 	properties map[string]*Property
+}
+
+// IsPlainShape returns true if this object type is the plain shape of a (plain, input)
+// pair. The plain shape of an object does not contain *InputType values and only
+// references other plain shapes.
+func (t *ObjectType) IsPlainShape() bool {
+	return t.PlainShape == nil
+}
+
+// IsInputShape returns true if this object type is the plain shape of a (plain, input)
+// pair. The input shape of an object may contain *InputType values and may
+// reference other input shapes.
+func (t *ObjectType) IsInputShape() bool {
+	return t.PlainShape != nil
 }
 
 func (t *ObjectType) Property(name string) (*Property, bool) {

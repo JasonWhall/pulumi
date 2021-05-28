@@ -40,8 +40,6 @@ import (
 type typeDetails struct {
 	outputType bool
 	inputType  bool
-	argsType   bool
-	plainType  bool
 }
 
 func title(s string) string {
@@ -325,7 +323,7 @@ func printComment(w io.Writer, comment, deprecationMessage, indent string) {
 	fmt.Fprintf(w, "%s */\n", indent)
 }
 
-func (mod *modContext) genPlainType(w io.Writer, name, comment string, properties []*schema.Property, input, arg, readonly bool, level int) {
+func (mod *modContext) genPlainType(w io.Writer, name, comment string, properties []*schema.Property, input, readonly bool, level int) {
 	indent := strings.Repeat("    ", level)
 
 	printComment(w, comment, "", indent)
@@ -730,13 +728,13 @@ func (mod *modContext) genResource(w io.Writer, r *schema.Resource) error {
 	// Emit the state type for get methods.
 	if r.StateInputs != nil {
 		fmt.Fprintf(w, "\n")
-		mod.genPlainType(w, stateType, r.StateInputs.Comment, r.StateInputs.Properties, true, true, false, 0)
+		mod.genPlainType(w, stateType, r.StateInputs.Comment, r.StateInputs.Properties, true, false, 0)
 	}
 
 	// Emit the argument type for construction.
 	fmt.Fprintf(w, "\n")
 	argsComment := fmt.Sprintf("The set of arguments for constructing a %s resource.", name)
-	mod.genPlainType(w, argsType, argsComment, r.InputProperties, true, true, false, 0)
+	mod.genPlainType(w, argsType, argsComment, r.InputProperties, true, false, 0)
 
 	return nil
 }
@@ -807,11 +805,11 @@ func (mod *modContext) genFunction(w io.Writer, fun *schema.Function) {
 	// If there are argument and/or return types, emit them.
 	if fun.Inputs != nil {
 		fmt.Fprintf(w, "\n")
-		mod.genPlainType(w, title(name)+"Args", fun.Inputs.Comment, fun.Inputs.Properties, true, false, false, 0)
+		mod.genPlainType(w, title(name)+"Args", fun.Inputs.Comment, fun.Inputs.Properties, true, false, 0)
 	}
 	if fun.Outputs != nil {
 		fmt.Fprintf(w, "\n")
-		mod.genPlainType(w, title(name)+"Result", fun.Outputs.Comment, fun.Outputs.Properties, false, false, true, 0)
+		mod.genPlainType(w, title(name)+"Result", fun.Outputs.Comment, fun.Outputs.Properties, false, true, 0)
 	}
 }
 
@@ -852,23 +850,11 @@ func (mod *modContext) genType(w io.Writer, obj *schema.ObjectType, input bool, 
 	}
 
 	name := tokenToName(obj.Token)
-	if mod.compatibility == tfbridge20 || mod.compatibility == kubernetes20 {
-		wrapInput := input && !mod.details(obj).plainType
-		mod.genPlainType(w, name, obj.Comment, properties, input, wrapInput, false, level)
-		return
+	if obj.IsInputShape() && mod.compatibility != tfbridge20 && mod.compatibility != kubernetes20 {
+		name += "Args"
 	}
 
-	if input {
-		if mod.details(obj).plainType {
-			mod.genPlainType(w, name, obj.Comment, properties, true, false, false, level)
-		}
-		if mod.details(obj).argsType {
-			mod.genPlainType(w, name+"Args", obj.Comment, properties, true, true, false, level)
-		}
-		return
-	}
-
-	mod.genPlainType(w, name, obj.Comment, properties, false, false, false, level)
+	mod.genPlainType(w, name, obj.Comment, properties, input, false, level)
 }
 
 func (mod *modContext) getTypeImports(t schema.Type, recurse bool, externalImports codegen.StringSet, imports map[string]codegen.StringSet, seen codegen.Set) bool {
@@ -1794,12 +1780,10 @@ func generateModuleContextMap(tool string, pkg *schema.Package, info NodePackage
 				types.details(t).outputType = true
 			}
 			types.details(t).inputType = true
-			types.details(t).argsType = true
 		})
 		if r.StateInputs != nil {
 			visitObjectTypes(r.StateInputs.Properties, func(t *schema.ObjectType) {
 				types.details(t).inputType = true
-				types.details(t).argsType = true
 			})
 		}
 	}
@@ -1817,13 +1801,11 @@ func generateModuleContextMap(tool string, pkg *schema.Package, info NodePackage
 		if f.Inputs != nil {
 			visitObjectTypes(f.Inputs.Properties, func(t *schema.ObjectType) {
 				types.details(t).inputType = true
-				types.details(t).plainType = true
 			})
 		}
 		if f.Outputs != nil {
 			visitObjectTypes(f.Outputs.Properties, func(t *schema.ObjectType) {
 				types.details(t).outputType = true
-				types.details(t).plainType = true
 			})
 		}
 	}
