@@ -2,14 +2,7 @@ package codegen
 
 import "github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 
-type Type struct {
-	schema.Type
-
-	Plain    bool
-	Optional bool
-}
-
-func visitTypeClosure(t Type, visitor func(t Type), seen Set) {
+func visitTypeClosure(t schema.Type, visitor func(t schema.Type), seen Set) {
 	if seen.Has(t) {
 		return
 	}
@@ -17,30 +10,29 @@ func visitTypeClosure(t Type, visitor func(t Type), seen Set) {
 
 	visitor(t)
 
-	switch st := t.Type.(type) {
+	switch st := t.(type) {
 	case *schema.ArrayType:
-		visitTypeClosure(Type{st.ElementType, t.Plain, t.Optional}, visitor, seen)
+		visitTypeClosure(st.ElementType, visitor, seen)
 	case *schema.MapType:
-		visitTypeClosure(Type{st.ElementType, t.Plain, t.Optional}, visitor, seen)
+		visitTypeClosure(st.ElementType, visitor, seen)
 	case *schema.ObjectType:
-		visitPropertyTypeClosure(t, st.Properties, visitor, seen)
+		for _, p := range st.Properties {
+			visitTypeClosure(p.Type, visitor, seen)
+		}
 	case *schema.UnionType:
 		for _, e := range st.ElementTypes {
-			visitTypeClosure(Type{e, t.Plain, t.Optional}, visitor, seen)
+			visitTypeClosure(e, visitor, seen)
 		}
+	case *schema.InputType:
+		visitTypeClosure(st.ElementType, visitor, seen)
+	case *schema.OptionalType:
+		visitTypeClosure(st.ElementType, visitor, seen)
 	}
 }
 
-func visitPropertyTypeClosure(root Type, properties []*schema.Property, visitor func(t Type), seen Set) {
+func VisitTypeClosure(properties []*schema.Property, visitor func(t schema.Type)) {
+	seen := Set{}
 	for _, p := range properties {
-		visitTypeClosure(Type{
-			Type:     p.Type,
-			Plain:    root.Plain || p.IsPlain,
-			Optional: !p.IsRequired,
-		}, visitor, seen)
+		visitTypeClosure(p.Type, visitor, seen)
 	}
-}
-
-func VisitTypeClosure(properties []*schema.Property, visitor func(t Type)) {
-	visitPropertyTypeClosure(Type{}, properties, visitor, Set{})
 }
