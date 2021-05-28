@@ -43,7 +43,6 @@ import (
 type typeDetails struct {
 	outputType         bool
 	inputType          bool
-	argsType           bool
 	resourceOutputType bool
 	plainType          bool
 }
@@ -141,7 +140,7 @@ func (mod *modContext) details(t *schema.ObjectType) *typeDetails {
 	return details
 }
 
-func (mod *modContext) modNameAndName(pkg *schema.Package, t schema.Type, input, args bool) (modName string, name string) {
+func (mod *modContext) modNameAndName(pkg *schema.Package, t schema.Type, input bool) (modName string, name string) {
 	var info PackageInfo
 	contract.AssertNoError(pkg.ImportLanguages(map[string]schema.Language{"python": Importer}))
 	if v, ok := pkg.Language["python"].(PackageInfo); ok {
@@ -158,7 +157,7 @@ func (mod *modContext) modNameAndName(pkg *schema.Package, t schema.Type, input,
 			modNameOverrides: info.ModuleNameOverrides,
 			compatibility:    info.Compatibility,
 		}
-		token, name = t.Token, namingCtx.unqualifiedObjectTypeName(t, input, args)
+		token, name = t.Token, namingCtx.unqualifiedObjectTypeName(t, input)
 	case *schema.ResourceType:
 		token, name = t.Token, tokenToName(t.Token)
 	}
@@ -173,11 +172,11 @@ func (mod *modContext) modNameAndName(pkg *schema.Package, t schema.Type, input,
 	return
 }
 
-func (mod *modContext) unqualifiedObjectTypeName(t *schema.ObjectType, input, args bool) string {
+func (mod *modContext) unqualifiedObjectTypeName(t *schema.ObjectType, input bool) string {
 	name := tokenToName(t.Token)
 
 	if mod.compatibility != tfbridge20 && mod.compatibility != kubernetes20 {
-		if args {
+		if t.IsInputShape() {
 			return name + "Args"
 		}
 		return name
@@ -192,7 +191,7 @@ func (mod *modContext) unqualifiedObjectTypeName(t *schema.ObjectType, input, ar
 	return name
 }
 
-func (mod *modContext) objectType(t *schema.ObjectType, input, args bool) string {
+func (mod *modContext) objectType(t *schema.ObjectType, input bool) string {
 	var prefix string
 	if !input {
 		prefix = "outputs."
@@ -200,11 +199,11 @@ func (mod *modContext) objectType(t *schema.ObjectType, input, args bool) string
 
 	// If it's an external type, reference it via fully qualified name.
 	if t.Package != mod.pkg {
-		modName, name := mod.modNameAndName(t.Package, t, input, args)
+		modName, name := mod.modNameAndName(t.Package, t, input)
 		return fmt.Sprintf("'%s.%s%s%s'", pyPack(t.Package.Name), modName, prefix, name)
 	}
 
-	modName, name := mod.tokenToModule(t.Token), mod.unqualifiedObjectTypeName(t, input, args)
+	modName, name := mod.tokenToModule(t.Token), mod.unqualifiedObjectTypeName(t, input)
 	if modName == "" && modName != mod.mod {
 		rootModName := "_root_outputs."
 		if input {
@@ -252,7 +251,7 @@ func (mod *modContext) resourceType(r *schema.ResourceType) string {
 	}
 
 	pkg := r.Resource.Package
-	modName, name := mod.modNameAndName(pkg, r, false, false)
+	modName, name := mod.modNameAndName(pkg, r, false)
 	return fmt.Sprintf("%s.%s%s", pyPack(pkg.Name), modName, name)
 }
 
@@ -795,15 +794,8 @@ func (mod *modContext) genTypes(dir string, fs fs) error {
 		// Export only the symbols we want exported.
 		fmt.Fprintf(w, "__all__ = [\n")
 		for _, t := range mod.types {
-			if input && mod.details(t).inputType {
-				if mod.details(t).argsType {
-					fmt.Fprintf(w, "    '%s',\n", mod.unqualifiedObjectTypeName(t, true, true))
-				}
-				if mod.details(t).plainType {
-					fmt.Fprintf(w, "    '%s',\n", mod.unqualifiedObjectTypeName(t, true, false))
-				}
-			} else if !input && mod.details(t).outputType {
-				fmt.Fprintf(w, "    '%s',\n", mod.unqualifiedObjectTypeName(t, false, false))
+			if input && mod.details(t).inputType || !input && mod.details(t).outputType {
+				fmt.Fprintf(w, "    '%s',\n", mod.unqualifiedObjectTypeName(t, input))
 			}
 		}
 		fmt.Fprintf(w, "]\n\n")
@@ -1886,7 +1878,7 @@ func (mod *modContext) typeString(t schema.Type, input, acceptMapping bool) stri
 	case *schema.MapType:
 		return fmt.Sprintf("Mapping[str, %s]", mod.typeString(t.ElementType, input, acceptMapping))
 	case *schema.ObjectType:
-		typ := mod.objectType(t, input, t.IsInputShape())
+		typ := mod.objectType(t, input)
 		if !acceptMapping {
 			return typ
 		}
@@ -2021,24 +2013,9 @@ func InitParamName(name string) string {
 }
 
 func (mod *modContext) genObjectType(w io.Writer, obj *schema.ObjectType, input bool) error {
-	if input {
-		if mod.details(obj).argsType {
-			name := mod.unqualifiedObjectTypeName(obj, input, true)
-			if err := mod.genType(w, name, obj.Comment, obj.Properties, input, false); err != nil {
-				return err
-			}
-		}
-		if mod.details(obj).plainType {
-			name := mod.unqualifiedObjectTypeName(obj, input, false)
-			if err := mod.genType(w, name, obj.Comment, obj.Properties, input, false); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	name := mod.unqualifiedObjectTypeName(obj, input, false)
-	return mod.genType(w, name, obj.Comment, obj.Properties, false, mod.details(obj).resourceOutputType)
+	name := mod.unqualifiedObjectTypeName(obj, input)
+	resourceOutputType := !input && mod.details(obj).resourceOutputType
+	return mod.genType(w, name, obj.Comment, obj.Properties, input, resourceOutputType)
 }
 
 func (mod *modContext) genType(w io.Writer, name, comment string, properties []*schema.Property, input, resourceOutput bool) error {
@@ -2334,7 +2311,6 @@ func generateModuleContextMap(tool string, pkg *schema.Package, info PackageInfo
 					getModFromToken(T.Token, T.Package).details(T).outputType = true
 				}
 				getModFromToken(T.Token, T.Package).details(T).inputType = true
-				getModFromToken(T.Token, T.Package).details(T).argsType = true
 			}
 		})
 		if r.StateInputs != nil {
@@ -2342,7 +2318,6 @@ func generateModuleContextMap(tool string, pkg *schema.Package, info PackageInfo
 				switch T := t.(type) {
 				case *schema.ObjectType:
 					getModFromToken(T.Token, T.Package).details(T).inputType = true
-					getModFromToken(T.Token, T.Package).details(T).argsType = true
 				case *schema.ResourceType:
 					getModFromToken(T.Token, T.Resource.Package)
 				}
