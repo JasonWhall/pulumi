@@ -20,8 +20,8 @@ class ComponentArgs:
                  e: str,
                  b: Optional[bool] = None,
                  bar: Optional['FooArgs'] = None,
-                 baz: Optional[Sequence['FooArgs']] = None,
-                 baz_map: Optional[Mapping[str, 'FooArgs']] = None,
+                 baz: Optional[Sequence[pulumi.Input['FooArgs']]] = None,
+                 baz_map: Optional[Mapping[str, pulumi.Input['FooArgs']]] = None,
                  d: Optional[int] = None,
                  f: Optional[str] = None,
                  foo: Optional[pulumi.Input['FooArgs']] = None):
@@ -93,11 +93,11 @@ class ComponentArgs:
 
     @property
     @pulumi.getter
-    def baz(self) -> Optional[Sequence['FooArgs']]:
+    def baz(self) -> Optional[Sequence[pulumi.Input['FooArgs']]]:
         return pulumi.get(self, "baz")
 
     @baz.setter
-    def baz(self, value: Optional[Sequence['FooArgs']]):
+    def baz(self, value: Optional[Sequence[pulumi.Input['FooArgs']]]):
         pulumi.set(self, "baz", value)
 
     @property
@@ -145,8 +145,8 @@ class Component(pulumi.ComponentResource):
                  a: Optional[bool] = None,
                  b: Optional[bool] = None,
                  bar: Optional[pulumi.InputType['FooArgs']] = None,
-                 baz: Optional[Sequence[pulumi.InputType['FooArgs']]] = None,
-                 baz_map: Optional[Mapping[str, pulumi.InputType['FooArgs']]] = None,
+                 baz: Optional[Sequence[pulumi.Input[pulumi.InputType['FooArgs']]]] = None,
+                 baz_map: Optional[Mapping[str, pulumi.Input[pulumi.InputType['FooArgs']]]] = None,
                  c: Optional[int] = None,
                  d: Optional[int] = None,
                  e: Optional[str] = None,
@@ -184,8 +184,8 @@ class Component(pulumi.ComponentResource):
                  a: Optional[bool] = None,
                  b: Optional[bool] = None,
                  bar: Optional[pulumi.InputType['FooArgs']] = None,
-                 baz: Optional[Sequence[pulumi.InputType['FooArgs']]] = None,
-                 baz_map: Optional[Mapping[str, pulumi.InputType['FooArgs']]] = None,
+                 baz: Optional[Sequence[pulumi.Input[pulumi.InputType['FooArgs']]]] = None,
+                 baz_map: Optional[Mapping[str, pulumi.Input[pulumi.InputType['FooArgs']]]] = None,
                  c: Optional[int] = None,
                  d: Optional[int] = None,
                  e: Optional[str] = None,

@@ -204,32 +204,12 @@ func tokenToFunctionName(tok string) string {
 	return camel(tokenToName(tok))
 }
 
-func simplifyInputUnions(t *schema.InputType) *schema.InputType {
-	union, ok := t.ElementType.(*schema.UnionType)
-	if !ok {
-		return t
-	}
-
-	elements := make([]schema.Type, len(union.ElementTypes))
-	for i, et := range union.ElementTypes {
-		if input, ok := et.(*schema.InputType); ok {
-			elements[i] = input.ElementType
-		}
-	}
-	return &schema.InputType{ElementType: &schema.UnionType{
-		ElementTypes:  elements,
-		DefaultType:   union.DefaultType,
-		Discriminator: union.Discriminator,
-		Mapping:       union.Mapping,
-	}}
-}
-
 func (mod *modContext) typeString(t schema.Type, input bool, constValue interface{}) string {
 	switch t := t.(type) {
 	case *schema.OptionalType:
 		return mod.typeString(t.ElementType, input, constValue) + " | undefined"
 	case *schema.InputType:
-		t = simplifyInputUnions(t)
+		t = codegen.SimplifyInputUnion(t)
 		typ := mod.typeString(t.ElementType, input, constValue)
 		if typ == "any" {
 			return typ
@@ -242,7 +222,7 @@ func (mod *modContext) typeString(t schema.Type, input bool, constValue interfac
 	case *schema.MapType:
 		return fmt.Sprintf("{[key: string]: %v}", mod.typeString(t.ElementType, input, constValue))
 	case *schema.ObjectType:
-		return mod.objectType(t.Package, t.Token, input, t.PlainShape != nil, false)
+		return mod.objectType(t.Package, t.Token, input, t.IsInputShape(), false)
 	case *schema.ResourceType:
 		return mod.resourceType(t)
 	case *schema.TokenType:
@@ -339,7 +319,7 @@ func (mod *modContext) genPlainType(w io.Writer, name, comment string, propertie
 
 		sigil, propertyType := "", p.Type
 		if !p.IsRequired() {
-			sigil, propertyType = "?", p.RequiredType()
+			sigil, propertyType = "?", codegen.RequiredType(p)
 		}
 
 		typ := mod.typeString(propertyType, input, p.ConstValue)
@@ -535,7 +515,7 @@ func (mod *modContext) genResource(w io.Writer, r *schema.Resource) error {
 
 		propertyType := prop.Type
 		if mod.compatibility == kubernetes20 {
-			propertyType = prop.RequiredType()
+			propertyType = codegen.RequiredType(prop)
 		}
 		fmt.Fprintf(w, "    public %sreadonly %s!: pulumi.Output<%s>;\n", outcomment, prop.Name, mod.typeString(propertyType, false, prop.ConstValue))
 	}
@@ -1011,7 +991,7 @@ func (mod *modContext) genHeader(w io.Writer, imports []string, externalImports 
 // configGetter returns the name of the config.get* method used for a configuration variable and the cast necessary
 // for the result of the call, if any.
 func (mod *modContext) configGetter(v *schema.Property) (string, string) {
-	typ := v.RequiredType()
+	typ := codegen.RequiredType(v)
 
 	if typ == schema.StringType {
 		return "get", ""

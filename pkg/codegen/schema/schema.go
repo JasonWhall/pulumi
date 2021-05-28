@@ -331,18 +331,10 @@ type Property struct {
 	Secret bool
 }
 
-// IsRequired returns true if this property is required (i.e. it's type is not Optional).
+// IsRequired returns true if this property is required (i.e. its type is not Optional).
 func (p *Property) IsRequired() bool {
 	_, optional := p.Type.(*OptionalType)
 	return !optional
-}
-
-// RequiredType the OptionalType enclosing the Property's type, if any.
-func (p *Property) RequiredType() Type {
-	if optional, ok := p.Type.(*OptionalType); ok {
-		return optional.ElementType
-	}
-	return p.Type
 }
 
 // Alias describes an alias for a Pulumi resource.

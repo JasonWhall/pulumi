@@ -768,7 +768,7 @@ func (mod *modContext) genTypes(dir string, fs fs) error {
 		imports := imports{}
 		for _, t := range mod.types {
 			if input && mod.details(t).inputType {
-				visitObjectTypes(t.Properties, func(t schema.Type, _ bool) {
+				visitObjectTypes(t.Properties, func(t schema.Type) {
 					switch t := t.(type) {
 					case *schema.ObjectType:
 						imports.addTypeIf(mod, t, true /*input*/, func(imp string) bool {
@@ -878,8 +878,7 @@ func (mod *modContext) genAwaitableType(w io.Writer, obj *schema.ObjectType) str
 
 	// Write out Python property getters for each property.
 	mod.genProperties(w, obj.Properties, false /*setters*/, func(prop *schema.Property) string {
-		return mod.typeString(prop.Type, false /*input*/, false /*wrapInput*/, false /*args*/, !prop.IsRequired,
-			false /*acceptMapping*/)
+		return mod.typeString(prop.Type, false /*input*/, false /*acceptMapping*/)
 	})
 
 	// Produce an awaitable subclass.
@@ -958,7 +957,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 
 	// Produce an args class.
 	argsComment := fmt.Sprintf("The set of arguments for constructing a %s resource.", name)
-	err := mod.genType(w, resourceArgsName, argsComment, res.InputProperties, false, true, true, false)
+	err := mod.genType(w, resourceArgsName, argsComment, res.InputProperties, true, false)
 	if err != nil {
 		return "", err
 	}
@@ -971,7 +970,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 		len(res.StateInputs.Properties) > 0
 	if hasStateInputs {
 		stateComment := fmt.Sprintf("Input properties used for looking up and filtering %s resources.", name)
-		err = mod.genType(w, fmt.Sprintf("_%sState", name), stateComment, res.StateInputs.Properties, false, true, true, false)
+		err = mod.genType(w, fmt.Sprintf("_%sState", name), stateComment, res.StateInputs.Properties, true, false)
 		if err != nil {
 			return "", err
 		}
@@ -1002,7 +1001,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 	// Determine if all inputs are optional.
 	allOptionalInputs := true
 	for _, prop := range res.InputProperties {
-		allOptionalInputs = allOptionalInputs && !prop.IsRequired
+		allOptionalInputs = allOptionalInputs && !prop.IsRequired()
 	}
 
 	// Emit __init__ overloads and implementation...
@@ -1015,8 +1014,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 
 		// If there's an argument type, emit it.
 		for _, prop := range res.InputProperties {
-			wrapInput := !prop.IsPlain
-			ty := mod.typeString(prop.Type, true, wrapInput, true, true /*optional*/, true /*acceptMapping*/)
+			ty := mod.typeString(codegen.OptionalType(prop), true, true /*acceptMapping*/)
 			fmt.Fprintf(w, ",\n                 %s: %s = None", InitParamName(prop.Name), ty)
 		}
 
@@ -1097,7 +1095,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 		}
 
 		// Check that required arguments are present.
-		if prop.IsRequired {
+		if prop.IsRequired() {
 			fmt.Fprintf(w, "            if %s is None and not opts.urn:\n", pname)
 			fmt.Fprintf(w, "                raise TypeError(\"Missing required property '%s'\")\n", pname)
 		}
@@ -1194,7 +1192,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 		if hasStateInputs {
 			for _, prop := range res.StateInputs.Properties {
 				pname := PyName(prop.Name)
-				ty := mod.typeString(prop.Type, true, true, true, true /*optional*/, true /*acceptMapping*/)
+				ty := mod.typeString(codegen.OptionalType(prop), true, true /*acceptMapping*/)
 				fmt.Fprintf(w, ",\n            %s: %s = None", pname, ty)
 			}
 		}
@@ -1229,7 +1227,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 
 	// Write out Python property getters for each of the resource's properties.
 	mod.genProperties(w, res.Properties, false /*setters*/, func(prop *schema.Property) string {
-		ty := mod.typeString(prop.Type, false /*input*/, false /*wrapInput*/, false /*args*/, !prop.IsRequired, false /*acceptMapping*/)
+		ty := mod.typeString(prop.Type, false /*input*/, false /*acceptMapping*/)
 		return fmt.Sprintf("pulumi.Output[%s]", ty)
 	})
 
@@ -1358,7 +1356,7 @@ func (mod *modContext) genFunction(fun *schema.Function) (string, error) {
 			ind = indent
 		}
 		pname := PyName(arg.Name)
-		ty := mod.typeString(arg.Type, true, false /*wrapInput*/, false /*args*/, true /*optional*/, true /*acceptMapping*/)
+		ty := mod.typeString(codegen.OptionalType(arg), true, true /*acceptMapping*/)
 		fmt.Fprintf(w, "%s%s: %s = None,\n", ind, pname, ty)
 	}
 	fmt.Fprintf(w, "%sopts: Optional[pulumi.InvokeOptions] = None", indent)
@@ -1378,7 +1376,7 @@ func (mod *modContext) genFunction(fun *schema.Function) (string, error) {
 	if len(args) > 0 {
 		fmt.Fprintln(docs, "")
 		for _, arg := range args {
-			mod.genPropDocstring(docs, PyName(arg.Name), arg, false /*wrapInputs*/, true /*acceptMapping*/)
+			mod.genPropDocstring(docs, PyName(arg.Name), arg, true /*acceptMapping*/)
 		}
 	}
 	printComment(w, docs.String(), "    ")
@@ -1457,7 +1455,7 @@ func (mod *modContext) genEnums(w io.Writer, enums []*schema.EnumType) error {
 func (mod *modContext) genEnum(w io.Writer, enum *schema.EnumType) error {
 	indent := "    "
 	enumName := tokenToName(enum.Token)
-	underlyingType := mod.typeString(enum.ElementType, false, false, false, false, false)
+	underlyingType := mod.typeString(enum.ElementType, false, false)
 
 	switch enum.ElementType {
 	case schema.StringType, schema.IntType, schema.NumberType:
@@ -1489,18 +1487,18 @@ func (mod *modContext) genEnum(w io.Writer, enum *schema.EnumType) error {
 	return nil
 }
 
-func visitObjectTypes(properties []*schema.Property, visitor func(objectOrResource schema.Type, plain bool)) {
-	codegen.VisitTypeClosure(properties, func(t codegen.Type) {
-		switch st := t.Type.(type) {
+func visitObjectTypes(properties []*schema.Property, visitor func(objectOrResource schema.Type)) {
+	codegen.VisitTypeClosure(properties, func(t schema.Type) {
+		switch st := t.(type) {
 		case *schema.EnumType, *schema.ObjectType, *schema.ResourceType:
-			visitor(st, t.Plain)
+			visitor(st)
 		}
 	})
 }
 
 func (mod *modContext) collectImports(properties []*schema.Property, imports imports, input bool) {
-	codegen.VisitTypeClosure(properties, func(t codegen.Type) {
-		switch t := t.Type.(type) {
+	codegen.VisitTypeClosure(properties, func(t schema.Type) {
+		switch t := t.(type) {
 		case *schema.ObjectType:
 			imports.addType(mod, t, input)
 		case *schema.EnumType:
@@ -1800,7 +1798,7 @@ func (mod *modContext) genInitDocstring(w io.Writer, res *schema.Resource, resou
 	fmt.Fprintln(b, ":param pulumi.ResourceOptions opts: Options for the resource.")
 	if !argOverload {
 		for _, prop := range res.InputProperties {
-			mod.genPropDocstring(b, InitParamName(prop.Name), prop, true /*wrapInput*/, true /*acceptMapping*/)
+			mod.genPropDocstring(b, InitParamName(prop.Name), prop, true /*acceptMapping*/)
 		}
 	}
 
@@ -1821,7 +1819,7 @@ func (mod *modContext) genGetDocstring(w io.Writer, res *schema.Resource) {
 	fmt.Fprintln(b, ":param pulumi.ResourceOptions opts: Options for the resource.")
 	if res.StateInputs != nil {
 		for _, prop := range res.StateInputs.Properties {
-			mod.genPropDocstring(b, PyName(prop.Name), prop, true /*wrapInput*/, true /*acceptMapping*/)
+			mod.genPropDocstring(b, PyName(prop.Name), prop, true /*acceptMapping*/)
 		}
 	}
 
@@ -1829,7 +1827,7 @@ func (mod *modContext) genGetDocstring(w io.Writer, res *schema.Resource) {
 	printComment(w, b.String(), "        ")
 }
 
-func (mod *modContext) genTypeDocstring(w io.Writer, comment string, properties []*schema.Property, wrapInput bool) {
+func (mod *modContext) genTypeDocstring(w io.Writer, comment string, properties []*schema.Property) {
 	// b contains the full text of the docstring, without the leading and trailing triple quotes.
 	b := &bytes.Buffer{}
 
@@ -1839,21 +1837,19 @@ func (mod *modContext) genTypeDocstring(w io.Writer, comment string, properties 
 	}
 
 	for _, prop := range properties {
-		mod.genPropDocstring(b, PyName(prop.Name), prop, wrapInput, false /*acceptMapping*/)
+		mod.genPropDocstring(b, PyName(prop.Name), prop, false /*acceptMapping*/)
 	}
 
 	// printComment handles the prefix and triple quotes.
 	printComment(w, b.String(), "        ")
 }
 
-func (mod *modContext) genPropDocstring(w io.Writer, name string, prop *schema.Property, wrapInput bool,
-	acceptMapping bool) {
-
+func (mod *modContext) genPropDocstring(w io.Writer, name string, prop *schema.Property, acceptMapping bool) {
 	if prop.Comment == "" {
 		return
 	}
 
-	ty := mod.typeString(prop.Type, true, wrapInput && !prop.IsPlain, wrapInput && !prop.IsPlain, false /*optional*/, acceptMapping)
+	ty := mod.typeString(codegen.RequiredType(prop), true, acceptMapping)
 
 	// If this property has some documentation associated with it, we need to split it so that it is indented
 	// in a way that Sphinx can understand.
@@ -1872,102 +1868,96 @@ func (mod *modContext) genPropDocstring(w io.Writer, name string, prop *schema.P
 	}
 }
 
-func (mod *modContext) typeString(t schema.Type, input, wrapInput, args, optional, acceptMapping bool) string {
-	var typ string
+func (mod *modContext) typeString(t schema.Type, input, acceptMapping bool) string {
 	switch t := t.(type) {
-	case *schema.EnumType:
-		typ = mod.tokenToEnum(t.Token)
-	case *schema.ArrayType:
-		typ = fmt.Sprintf("Sequence[%s]", mod.typeString(t.ElementType, input, wrapInput, args, false, acceptMapping))
-	case *schema.MapType:
-		typ = fmt.Sprintf("Mapping[str, %s]", mod.typeString(t.ElementType, input, wrapInput, args, false, acceptMapping))
-	case *schema.ObjectType:
-		typ = mod.objectType(t, input, args)
-		if acceptMapping {
-			typ = fmt.Sprintf("pulumi.InputType[%s]", typ)
+	case *schema.OptionalType:
+		return fmt.Sprintf("Optional[%s]", mod.typeString(t.ElementType, input, acceptMapping))
+	case *schema.InputType:
+		t = codegen.SimplifyInputUnion(t)
+		typ := mod.typeString(t.ElementType, input, acceptMapping)
+		if typ == "Any" {
+			return typ
 		}
+		return fmt.Sprintf("pulumi.Input[%s]", typ)
+	case *schema.EnumType:
+		return mod.tokenToEnum(t.Token)
+	case *schema.ArrayType:
+		return fmt.Sprintf("Sequence[%s]", mod.typeString(t.ElementType, input, acceptMapping))
+	case *schema.MapType:
+		return fmt.Sprintf("Mapping[str, %s]", mod.typeString(t.ElementType, input, acceptMapping))
+	case *schema.ObjectType:
+		typ := mod.objectType(t, input, t.IsInputShape())
+		if !acceptMapping {
+			return typ
+		}
+		return fmt.Sprintf("pulumi.InputType[%s]", typ)
 	case *schema.ResourceType:
-		typ = fmt.Sprintf("'%s'", mod.resourceType(t))
+		return fmt.Sprintf("'%s'", mod.resourceType(t))
 	case *schema.TokenType:
 		// Use the underlying type for now.
 		if t.UnderlyingType != nil {
-			return mod.typeString(t.UnderlyingType, input, wrapInput, args, optional, acceptMapping)
+			return mod.typeString(t.UnderlyingType, input, acceptMapping)
 		}
-		typ = "Any"
+		return "Any"
 	case *schema.UnionType:
 		if !input {
 			for _, e := range t.ElementTypes {
 				// If this is an output and a "relaxed" enum, emit the type as the underlying primitive type rather than the union.
 				// Eg. Output[str] rather than Output[Any]
 				if typ, ok := e.(*schema.EnumType); ok {
-					return mod.typeString(typ.ElementType, input, wrapInput, args, optional, acceptMapping)
+					return mod.typeString(typ.ElementType, input, acceptMapping)
 				}
 			}
 			if t.DefaultType != nil {
-				return mod.typeString(t.DefaultType, input, wrapInput, args, optional, acceptMapping)
+				return mod.typeString(t.DefaultType, input, acceptMapping)
 			}
-			typ = "Any"
-		} else {
-			elementTypeSet := codegen.NewStringSet()
-			var elementTypes []schema.Type
-			for _, e := range t.ElementTypes {
-				et := mod.typeString(e, input, wrapInput, args, false, acceptMapping)
-				if !elementTypeSet.Has(et) {
-					elementTypeSet.Add(et)
-					elementTypes = append(elementTypes, e)
-				}
-			}
-
-			if len(elementTypes) == 1 {
-				return mod.typeString(elementTypes[0], input, wrapInput, args, optional, acceptMapping)
-			}
-
-			var elements []string
-			for _, e := range elementTypes {
-				t := mod.typeString(e, input, wrapInput, args, false, acceptMapping)
-				if args && strings.HasPrefix(t, "pulumi.Input[") {
-					contract.Assert(t[len(t)-1] == ']')
-					// Strip off the leading `pulumi.Input[` and the trailing `]`
-					t = t[len("pulumi.Input[") : len(t)-1]
-				}
-				elements = append(elements, t)
-			}
-			typ = fmt.Sprintf("Union[%s]", strings.Join(elements, ", "))
+			return "Any"
 		}
+
+		elementTypeSet := codegen.NewStringSet()
+		elements := make([]string, 0, len(t.ElementTypes))
+		for _, e := range t.ElementTypes {
+			et := mod.typeString(e, input, acceptMapping)
+			if !elementTypeSet.Has(et) {
+				elementTypeSet.Add(et)
+				elements = append(elements, et)
+			}
+		}
+
+		if len(elements) == 1 {
+			return elements[0]
+		}
+		return fmt.Sprintf("Union[%s]", strings.Join(elements, ", "))
 	default:
 		switch t {
 		case schema.BoolType:
-			typ = "bool"
+			return "bool"
 		case schema.IntType:
-			typ = "int"
+			return "int"
 		case schema.NumberType:
-			typ = "float"
+			return "float"
 		case schema.StringType:
-			typ = "str"
+			return "str"
 		case schema.ArchiveType:
-			typ = "pulumi.Archive"
+			return "pulumi.Archive"
 		case schema.AssetType:
-			typ = "Union[pulumi.Asset, pulumi.Archive]"
+			return "Union[pulumi.Asset, pulumi.Archive]"
 		case schema.JSONType:
 			fallthrough
 		case schema.AnyType:
-			typ = "Any"
+			return "Any"
 		}
 	}
 
-	if wrapInput && typ != "Any" {
-		typ = fmt.Sprintf("pulumi.Input[%s]", typ)
-	}
-	if optional {
-		return fmt.Sprintf("Optional[%s]", typ)
-	}
-	return typ
+	panic(fmt.Errorf("unexpected type %T", t))
 }
 
 // pyType returns the expected runtime type for the given variable.  Of course, being a dynamic language, this
 // check is not exhaustive, but it should be good enough to catch 80% of the cases early on.
 func (mod *modContext) pyType(typ schema.Type) string {
 	switch typ := typ.(type) {
+	case *schema.OptionalType:
+		return mod.pyType(typ.ElementType)
 	case *schema.EnumType:
 		return mod.pyType(typ.ElementType)
 	case *schema.ArrayType:
@@ -2034,13 +2024,13 @@ func (mod *modContext) genObjectType(w io.Writer, obj *schema.ObjectType, input 
 	if input {
 		if mod.details(obj).argsType {
 			name := mod.unqualifiedObjectTypeName(obj, input, true)
-			if err := mod.genType(w, name, obj.Comment, obj.Properties, mod.details(obj).plainType, input, true, false); err != nil {
+			if err := mod.genType(w, name, obj.Comment, obj.Properties, input, false); err != nil {
 				return err
 			}
 		}
 		if mod.details(obj).plainType {
 			name := mod.unqualifiedObjectTypeName(obj, input, false)
-			if err := mod.genType(w, name, obj.Comment, obj.Properties, mod.details(obj).plainType, input, false, false); err != nil {
+			if err := mod.genType(w, name, obj.Comment, obj.Properties, input, false); err != nil {
 				return err
 			}
 		}
@@ -2048,18 +2038,18 @@ func (mod *modContext) genObjectType(w io.Writer, obj *schema.ObjectType, input 
 	}
 
 	name := mod.unqualifiedObjectTypeName(obj, input, false)
-	return mod.genType(w, name, obj.Comment, obj.Properties, mod.details(obj).plainType, false, false, mod.details(obj).resourceOutputType)
+	return mod.genType(w, name, obj.Comment, obj.Properties, false, mod.details(obj).resourceOutputType)
 }
 
-func (mod *modContext) genType(w io.Writer, name, comment string, properties []*schema.Property, plainType, input, args, resourceOutput bool) error {
+func (mod *modContext) genType(w io.Writer, name, comment string, properties []*schema.Property, input, resourceOutput bool) error {
 	// Sort required props first.
 	props := make([]*schema.Property, len(properties))
 	copy(props, properties)
 	sort.Slice(props, func(i, j int) bool {
 		pi, pj := props[i], props[j]
 		switch {
-		case pi.IsRequired != pj.IsRequired:
-			return pi.IsRequired && !pj.IsRequired
+		case pi.IsRequired() != pj.IsRequired():
+			return pi.IsRequired() && !pj.IsRequired()
 		default:
 			return pi.Name < pj.Name
 		}
@@ -2129,15 +2119,15 @@ func (mod *modContext) genType(w io.Writer, name, comment string, properties []*
 	}
 	for _, prop := range props {
 		pname := PyName(prop.Name)
-		ty := mod.typeString(prop.Type, input, args && !prop.IsPlain, args, !prop.IsRequired, false /*acceptMapping*/)
+		ty := mod.typeString(prop.Type, input, false /*acceptMapping*/)
 		var defaultValue string
-		if !prop.IsRequired {
+		if !prop.IsRequired() {
 			defaultValue = " = None"
 		}
 		fmt.Fprintf(w, ",\n                 %s: %s%s", pname, ty, defaultValue)
 	}
 	fmt.Fprintf(w, "):\n")
-	mod.genTypeDocstring(w, comment, props, args)
+	mod.genTypeDocstring(w, comment, props)
 	if len(props) == 0 {
 		fmt.Fprintf(w, "        pass\n")
 	}
@@ -2175,7 +2165,7 @@ func (mod *modContext) genType(w io.Writer, name, comment string, properties []*
 		}
 
 		var indent string
-		if !prop.IsRequired {
+		if !prop.IsRequired() {
 			fmt.Fprintf(w, "        if %s is not None:\n", pname)
 			indent = "    "
 		}
@@ -2186,7 +2176,7 @@ func (mod *modContext) genType(w io.Writer, name, comment string, properties []*
 
 	// Generate properties. Input types have getters and setters, output types only have getters.
 	mod.genProperties(w, props, input /*setters*/, func(prop *schema.Property) string {
-		return mod.typeString(prop.Type, input, args && !prop.IsPlain, args, !prop.IsRequired, false /*acceptMapping*/)
+		return mod.typeString(prop.Type, input, false /*acceptMapping*/)
 	})
 
 	fmt.Fprintf(w, "\n")
@@ -2320,7 +2310,7 @@ func generateModuleContextMap(tool string, pkg *schema.Package, info PackageInfo
 		configMod.isConfig = true
 	}
 
-	visitObjectTypes(pkg.Config, func(t schema.Type, _ bool) {
+	visitObjectTypes(pkg.Config, func(t schema.Type) {
 		if t, ok := t.(*schema.ObjectType); ok {
 			getModFromToken(t.Token, t.Package).details(t).outputType = true
 		}
@@ -2330,14 +2320,14 @@ func generateModuleContextMap(tool string, pkg *schema.Package, info PackageInfo
 	scanResource := func(r *schema.Resource) {
 		mod := getModFromToken(r.Token, pkg)
 		mod.resources = append(mod.resources, r)
-		visitObjectTypes(r.Properties, func(t schema.Type, _ bool) {
+		visitObjectTypes(r.Properties, func(t schema.Type) {
 			switch T := t.(type) {
 			case *schema.ObjectType:
 				getModFromToken(T.Token, T.Package).details(T).outputType = true
 				getModFromToken(T.Token, T.Package).details(T).resourceOutputType = true
 			}
 		})
-		visitObjectTypes(r.InputProperties, func(t schema.Type, plain bool) {
+		visitObjectTypes(r.InputProperties, func(t schema.Type) {
 			switch T := t.(type) {
 			case *schema.ObjectType:
 				if r.IsProvider {
@@ -2348,7 +2338,7 @@ func generateModuleContextMap(tool string, pkg *schema.Package, info PackageInfo
 			}
 		})
 		if r.StateInputs != nil {
-			visitObjectTypes(r.StateInputs.Properties, func(t schema.Type, _ bool) {
+			visitObjectTypes(r.StateInputs.Properties, func(t schema.Type) {
 				switch T := t.(type) {
 				case *schema.ObjectType:
 					getModFromToken(T.Token, T.Package).details(T).inputType = true
@@ -2370,7 +2360,7 @@ func generateModuleContextMap(tool string, pkg *schema.Package, info PackageInfo
 		mod := getModFromToken(f.Token, f.Package)
 		mod.functions = append(mod.functions, f)
 		if f.Inputs != nil {
-			visitObjectTypes(f.Inputs.Properties, func(t schema.Type, _ bool) {
+			visitObjectTypes(f.Inputs.Properties, func(t schema.Type) {
 				switch T := t.(type) {
 				case *schema.ObjectType:
 					getModFromToken(T.Token, T.Package).details(T).inputType = true
@@ -2381,7 +2371,7 @@ func generateModuleContextMap(tool string, pkg *schema.Package, info PackageInfo
 			})
 		}
 		if f.Outputs != nil {
-			visitObjectTypes(f.Outputs.Properties, func(t schema.Type, _ bool) {
+			visitObjectTypes(f.Outputs.Properties, func(t schema.Type) {
 				switch T := t.(type) {
 				case *schema.ObjectType:
 					getModFromToken(T.Token, T.Package).details(T).outputType = true
