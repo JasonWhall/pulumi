@@ -85,8 +85,8 @@ export interface ComponentArgs {
     a: boolean;
     b?: boolean;
     bar?: inputs.FooArgs;
-    baz?: inputs.FooArgs[];
-    bazMap?: {[key: string]: inputs.FooArgs};
+    baz?: pulumi.Input<inputs.FooArgs>[];
+    bazMap?: {[key: string]: pulumi.Input<inputs.FooArgs>};
     c: number;
     d?: number;
     e: string;
