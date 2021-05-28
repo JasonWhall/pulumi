@@ -133,6 +133,8 @@ func (*ArrayType) isType() {}
 
 // EnumType represents an enum.
 type EnumType struct {
+	// Package is the type's package.
+	Package *Package
 	// Token is the type's Pulumi type token.
 	Token string
 	// Comment is the description of the type, if any.
@@ -204,6 +206,11 @@ type ObjectType struct {
 	// Language specifies additional language-specific data about the object type.
 	Language map[string]interface{}
 
+	// InputShape is the input shape for this object. May be nil.
+	InputShape *ObjectType
+	// PlainShape is the plain shape for this object. May be nil.
+	PlainShape *ObjectType
+
 	properties map[string]*Property
 }
 
@@ -219,6 +226,9 @@ func (t *ObjectType) Property(name string) (*Property, bool) {
 }
 
 func (t *ObjectType) String() string {
+	if t.PlainShape != nil {
+		return t.Token + "•Input"
+	}
 	return t.Token
 }
 
@@ -252,6 +262,30 @@ func (t *TokenType) String() string {
 
 func (*TokenType) isType() {}
 
+// InputType represents a type that accepts either a prompt value or an output value.
+type InputType struct {
+	// ElementType is the element type of the input.
+	ElementType Type
+}
+
+func (t *InputType) String() string {
+	return fmt.Sprintf("Input<%v>", t.ElementType)
+}
+
+func (*InputType) isType() {}
+
+// OptionalType represents a type that accepts an optional value.
+type OptionalType struct {
+	// ElementType is the element type of the input.
+	ElementType Type
+}
+
+func (t *OptionalType) String() string {
+	return fmt.Sprintf("Optional<%v>", t.ElementType)
+}
+
+func (*OptionalType) isType() {}
+
 // DefaultValue describes a default value for a property.
 type DefaultValue struct {
 	// Value specifies a static default value, if any. This value must be representable in the Pulumi schema type
@@ -275,16 +309,26 @@ type Property struct {
 	ConstValue interface{}
 	// DefaultValue is the default value for the property, if any.
 	DefaultValue *DefaultValue
-	// IsRequired is true if the property must always be populated.
-	IsRequired bool
-	// IsPlain is true if the property only accepts prompt values.
-	IsPlain bool
 	// DeprecationMessage indicates whether or not the property is deprecated.
 	DeprecationMessage string
 	// Language specifies additional language-specific data about the property.
 	Language map[string]interface{}
 	// Secret is true if the property is secret (default false).
 	Secret bool
+}
+
+// IsRequired returns true if this property is required (i.e. it's type is not Optional).
+func (p *Property) IsRequired() bool {
+	_, optional := p.Type.(*OptionalType)
+	return !optional
+}
+
+// RequiredType the OptionalType enclosing the Property's type, if any.
+func (p *Property) RequiredType() Type {
+	if optional, ok := p.Type.(*OptionalType); ok {
+		return optional.ElementType
+	}
+	return p.Type
 }
 
 // Alias describes an alias for a Pulumi resource.
@@ -669,6 +713,8 @@ type TypeSpec struct {
 	OneOf []TypeSpec `json:"oneOf,omitempty"`
 	// Discriminator informs the consumer of an alternative schema based on the value associated with it.
 	Discriminator *DiscriminatorSpec `json:"discriminator,omitempty"`
+	// Plan indicates that when used as an input, this type does not accept eventual values.
+	Plain bool `json:"plain,omitempty"`
 }
 
 // DiscriminatorSpec informs the consumer of an alternative schema based on the value associated with it.
@@ -765,7 +811,8 @@ type ResourceSpec struct {
 	InputProperties map[string]PropertySpec `json:"inputProperties,omitempty"`
 	// RequiredInputs is a list of the names of the resource's required input properties.
 	RequiredInputs []string `json:"requiredInputs,omitempty"`
-	// PlainInputs is a list of the names of the resource's plain input properties that only accept prompt values.
+	// PlainInputs was a list of the names of the resource's plain input properties. This property is ignored:
+	// instead, property types should be marked as plain where necessary.
 	PlainInputs []string `json:"plainInputs,omitempty"`
 	// StateInputs is an optional ObjectTypeSpec that describes additional inputs that mau be necessary to get an
 	// existing resource. If this is unset, only an ID is necessary.
@@ -928,6 +975,7 @@ func importSpec(spec PackageSpec, languages map[string]Language, loader Loader) 
 	}
 	for _, t := range types.objects {
 		typeList = append(typeList, t)
+		typeList = append(typeList, t.InputShape)
 	}
 	for _, t := range types.arrays {
 		typeList = append(typeList, t)
@@ -1003,6 +1051,8 @@ type types struct {
 	tokens    map[string]*TokenType
 	enums     map[string]*EnumType
 	named     map[string]Type // objects and enums
+	inputs    map[Type]*InputType
+	optionals map[Type]*OptionalType
 }
 
 func (t *types) bindPrimitiveType(name string) (Type, error) {
@@ -1120,7 +1170,64 @@ func versionEquals(a, b *semver.Version) bool {
 	return a.Equals(*b)
 }
 
-func (t *types) bindTypeSpecRef(spec TypeSpec) (Type, error) {
+func (t *types) newInputType(elementType Type) Type {
+	if _, ok := elementType.(*InputType); ok {
+		return elementType
+	}
+
+	typ, ok := t.inputs[elementType]
+	if !ok {
+		typ = &InputType{ElementType: elementType}
+		t.inputs[elementType] = typ
+	}
+	return typ
+}
+
+func (t *types) newOptionalType(elementType Type) Type {
+	if _, ok := elementType.(*OptionalType); ok {
+		return elementType
+	}
+	typ, ok := t.optionals[elementType]
+	if !ok {
+		typ = &OptionalType{ElementType: elementType}
+		t.optionals[elementType] = typ
+	}
+	return typ
+}
+
+func (t *types) newMapType(elementType Type) Type {
+	typ, ok := t.maps[elementType]
+	if !ok {
+		typ = &MapType{ElementType: elementType}
+		t.maps[elementType] = typ
+	}
+	return typ
+}
+
+func (t *types) newArrayType(elementType Type) Type {
+	typ, ok := t.arrays[elementType]
+	if !ok {
+		typ = &ArrayType{ElementType: elementType}
+		t.arrays[elementType] = typ
+	}
+	return typ
+}
+
+func (t *types) newUnionType(elements []Type, defaultType Type, discriminator string, mapping map[string]string) *UnionType {
+	union := &UnionType{
+		ElementTypes:  elements,
+		DefaultType:   defaultType,
+		Discriminator: discriminator,
+		Mapping:       mapping,
+	}
+	if typ, ok := t.unions[union.String()]; ok {
+		return typ
+	}
+	t.unions[union.String()] = union
+	return union
+}
+
+func (t *types) bindTypeSpecRef(spec TypeSpec, inputShape bool) (Type, error) {
 	// Explicitly handle built-in types so that we don't have to handle this type of path during ref parsing.
 	switch spec.Ref {
 	case "pulumi.json#/Archive":
@@ -1152,6 +1259,9 @@ func (t *types) bindTypeSpecRef(spec TypeSpec) (Type, error) {
 			if !ok {
 				return nil, fmt.Errorf("type %v not found in package %v", ref.Token, ref.Package)
 			}
+			if obj, ok := typ.(*ObjectType); ok && inputShape {
+				typ = obj.InputShape
+			}
 			return typ, nil
 		case resourcesRef, providerRef:
 			typ, ok := pkg.GetResourceType(ref.Token)
@@ -1165,6 +1275,9 @@ func (t *types) bindTypeSpecRef(spec TypeSpec) (Type, error) {
 	switch ref.Kind {
 	case typesRef:
 		if typ, ok := t.objects[ref.Token]; ok {
+			if inputShape {
+				return typ.InputShape, nil
+			}
 			return typ, nil
 		}
 		if typ, ok := t.enums[ref.Token]; ok {
@@ -1174,7 +1287,7 @@ func (t *types) bindTypeSpecRef(spec TypeSpec) (Type, error) {
 		if !ok {
 			typ = &TokenType{Token: ref.Token}
 			if spec.Type != "" {
-				ut, err := t.bindType(TypeSpec{Type: spec.Type})
+				ut, err := t.bindPrimitiveType(spec.Type)
 				if err != nil {
 					return nil, err
 				}
@@ -1195,9 +1308,15 @@ func (t *types) bindTypeSpecRef(spec TypeSpec) (Type, error) {
 	}
 }
 
-func (t *types) bindType(spec TypeSpec) (Type, error) {
+func (t *types) bindType(spec TypeSpec, inputShape bool) (result Type, err error) {
+	if inputShape && !spec.Plain {
+		defer func() {
+			result = t.newInputType(result)
+		}()
+	}
+
 	if spec.Ref != "" {
-		return t.bindTypeSpecRef(spec)
+		return t.bindTypeSpecRef(spec, inputShape)
 	}
 
 	if spec.OneOf != nil {
@@ -1216,7 +1335,7 @@ func (t *types) bindType(spec TypeSpec) (Type, error) {
 
 		elements := make([]Type, len(spec.OneOf))
 		for i, spec := range spec.OneOf {
-			e, err := t.bindType(spec)
+			e, err := t.bindType(spec, inputShape)
 			if err != nil {
 				return nil, err
 			}
@@ -1230,17 +1349,7 @@ func (t *types) bindType(spec TypeSpec) (Type, error) {
 			mapping = spec.Discriminator.Mapping
 		}
 
-		union := &UnionType{
-			ElementTypes:  elements,
-			DefaultType:   defaultType,
-			Discriminator: discriminator,
-			Mapping:       mapping,
-		}
-		if typ, ok := t.unions[union.String()]; ok {
-			return typ, nil
-		}
-		t.unions[union.String()] = union
-		return union, nil
+		return t.newUnionType(elements, defaultType, discriminator, mapping), nil
 	}
 
 	// nolint: goconst
@@ -1252,35 +1361,43 @@ func (t *types) bindType(spec TypeSpec) (Type, error) {
 			return nil, errors.Errorf("missing \"items\" property in type spec")
 		}
 
-		elementType, err := t.bindType(*spec.Items)
+		elementType, err := t.bindType(*spec.Items, inputShape)
 		if err != nil {
 			return nil, err
 		}
 
-		typ, ok := t.arrays[elementType]
-		if !ok {
-			typ = &ArrayType{ElementType: elementType}
-			t.arrays[elementType] = typ
-		}
-		return typ, nil
+		return t.newArrayType(elementType), nil
 	case "object":
 		elementType := StringType
 		if spec.AdditionalProperties != nil {
-			et, err := t.bindType(*spec.AdditionalProperties)
+			et, err := t.bindType(*spec.AdditionalProperties, inputShape)
 			if err != nil {
 				return nil, err
 			}
 			elementType = et
 		}
 
-		typ, ok := t.maps[elementType]
-		if !ok {
-			typ = &MapType{ElementType: elementType}
-			t.maps[elementType] = typ
-		}
-		return typ, nil
+		return t.newMapType(elementType), nil
 	default:
 		return nil, errors.Errorf("unknown type kind %v", spec.Type)
+	}
+}
+
+func plainType(typ Type) Type {
+	for {
+		switch t := typ.(type) {
+		case *InputType:
+			typ = t.ElementType
+		case *OptionalType:
+			typ = t.ElementType
+		case *ObjectType:
+			if t.PlainShape == nil {
+				return t
+			}
+			typ = t.PlainShape
+		default:
+			return t
+		}
 	}
 }
 
@@ -1289,7 +1406,7 @@ func bindConstValue(value interface{}, typ Type) (interface{}, error) {
 		return nil, nil
 	}
 
-	switch typ {
+	switch plainType(typ) {
 	case BoolType:
 		if _, ok := value.(bool); !ok {
 			return nil, errors.Errorf("invalid constant of type %T for boolean property", value)
@@ -1324,6 +1441,7 @@ func bindDefaultValue(value interface{}, spec *DefaultSpec, typ Type) (*DefaultV
 	}
 
 	if value != nil {
+		typ = plainType(typ)
 		switch typ := typ.(type) {
 		case *UnionType:
 			if typ.DefaultType != nil {
@@ -1380,14 +1498,14 @@ func bindDefaultValue(value interface{}, spec *DefaultSpec, typ Type) (*DefaultV
 
 // bindProperties binds the map of property specs and list of required properties into a sorted list of properties and
 // a lookup table.
-func (t *types) bindProperties(properties map[string]PropertySpec, required []string,
-	plain []string) ([]*Property, map[string]*Property, error) {
+func (t *types) bindProperties(properties map[string]PropertySpec,
+	required []string, inputShape bool) ([]*Property, map[string]*Property, error) {
 
 	// Bind property types and constant or default values.
 	propertyMap := map[string]*Property{}
 	var result []*Property
 	for name, spec := range properties {
-		typ, err := t.bindType(spec.TypeSpec)
+		typ, err := t.bindType(spec.TypeSpec, inputShape)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "error binding type for property %q", name)
 		}
@@ -1410,7 +1528,7 @@ func (t *types) bindProperties(properties map[string]PropertySpec, required []st
 		p := &Property{
 			Name:               name,
 			Comment:            spec.Description,
-			Type:               typ,
+			Type:               t.newOptionalType(typ),
 			ConstValue:         cv,
 			DefaultValue:       dv,
 			DeprecationMessage: spec.DeprecationMessage,
@@ -1427,16 +1545,7 @@ func (t *types) bindProperties(properties map[string]PropertySpec, required []st
 		if !ok {
 			return nil, nil, errors.Errorf("unknown required property %q", name)
 		}
-		p.IsRequired = true
-	}
-
-	// Compute plain properties.
-	for _, name := range plain {
-		p, ok := propertyMap[name]
-		if !ok {
-			return nil, nil, errors.Errorf("unknown plain property %q", name)
-		}
-		p.IsPlain = true
+		p.Type = p.Type.(*OptionalType).ElementType
 	}
 
 	sort.Slice(result, func(i, j int) bool {
@@ -1446,14 +1555,17 @@ func (t *types) bindProperties(properties map[string]PropertySpec, required []st
 	return result, propertyMap, nil
 }
 
-func (t *types) bindObjectTypeDetails(obj *ObjectType, token string, spec ObjectTypeSpec,
-	supportsPlainProperties bool) error {
-
-	if !supportsPlainProperties && len(spec.Plain) > 0 {
-		return errors.New("plain cannot be specified")
+func (t *types) bindObjectTypeDetails(obj *ObjectType, token string, spec ObjectTypeSpec) error {
+	if len(spec.Plain) > 0 {
+		return errors.New("plain has been removed; the property type must be marked as plain instead")
 	}
 
-	properties, propertyMap, err := t.bindProperties(spec.Properties, spec.Required, spec.Plain)
+	properties, propertyMap, err := t.bindProperties(spec.Properties, spec.Required, false)
+	if err != nil {
+		return err
+	}
+
+	inputProperties, inputPropertyMap, err := t.bindProperties(spec.Properties, spec.Required, true)
 	if err != nil {
 		return err
 	}
@@ -1469,12 +1581,21 @@ func (t *types) bindObjectTypeDetails(obj *ObjectType, token string, spec Object
 	obj.Language = language
 	obj.Properties = properties
 	obj.properties = propertyMap
+
+	obj.InputShape.Package = t.pkg
+	obj.InputShape.Token = token
+	obj.InputShape.Comment = spec.Description
+	obj.InputShape.Language = language
+	obj.InputShape.Properties = inputProperties
+	obj.InputShape.properties = inputPropertyMap
+
 	return nil
 }
 
-func (t *types) bindObjectType(token string, spec ObjectTypeSpec, supportsPlainProperties bool) (*ObjectType, error) {
+func (t *types) bindObjectType(token string, spec ObjectTypeSpec) (*ObjectType, error) {
 	obj := &ObjectType{}
-	if err := t.bindObjectTypeDetails(obj, token, spec, supportsPlainProperties); err != nil {
+	obj.InputShape = &ObjectType{PlainShape: obj}
+	if err := t.bindObjectTypeDetails(obj, token, spec); err != nil {
 		return nil, err
 	}
 	return obj, nil
@@ -1494,7 +1615,7 @@ func (t *types) bindResourceType(token string) (*ResourceType, error) {
 }
 
 func (t *types) bindEnumTypeDetails(enum *EnumType, token string, spec ComplexTypeSpec) error {
-	typ, err := t.bindType(TypeSpec{Type: spec.Type})
+	typ, err := t.bindPrimitiveType(spec.Type)
 	if err != nil {
 		return err
 	}
@@ -1504,6 +1625,7 @@ func (t *types) bindEnumTypeDetails(enum *EnumType, token string, spec ComplexTy
 		return err
 	}
 
+	enum.Package = t.pkg
 	enum.Token = token
 	enum.Elements = values
 	enum.ElementType = typ
@@ -1564,7 +1686,6 @@ func (t *types) bindEnumType(token string, spec ComplexTypeSpec) (*EnumType, err
 }
 
 func bindTypes(pkg *Package, complexTypes map[string]ComplexTypeSpec, loader Loader) (*types, error) {
-
 	typs := &types{
 		pkg:       pkg,
 		loader:    loader,
@@ -1576,6 +1697,8 @@ func bindTypes(pkg *Package, complexTypes map[string]ComplexTypeSpec, loader Loa
 		tokens:    map[string]*TokenType{},
 		enums:     map[string]*EnumType{},
 		named:     map[string]Type{},
+		inputs:    map[Type]*InputType{},
+		optionals: map[Type]*OptionalType{},
 	}
 
 	// Declare object and enum types before processing properties.
@@ -1586,6 +1709,7 @@ func bindTypes(pkg *Package, complexTypes map[string]ComplexTypeSpec, loader Loa
 			// object type is its token. While this doesn't affect object types directly, it breaks the interning of types
 			// that reference object types (e.g. arrays, maps, unions)
 			typ := &ObjectType{Token: token}
+			typ.InputShape = &ObjectType{Token: token, PlainShape: typ}
 			typs.objects[token] = typ
 			typs.named[token] = typ
 		} else if len(spec.Enum) > 0 {
@@ -1609,7 +1733,7 @@ func bindTypes(pkg *Package, complexTypes map[string]ComplexTypeSpec, loader Loa
 	for token, spec := range complexTypes {
 		if spec.Type == "object" {
 			if err := typs.bindObjectTypeDetails(
-				typs.objects[token], token, spec.ObjectTypeSpec, true /*supportsPlainProperties*/); err != nil {
+				typs.objects[token], token, spec.ObjectTypeSpec); err != nil {
 				return nil, errors.Wrapf(err, "failed to bind type %s", token)
 			}
 		}
@@ -1647,7 +1771,7 @@ func bindMethods(resourceToken string, methods map[string]string,
 }
 
 func bindConfig(spec ConfigSpec, types *types) ([]*Property, error) {
-	properties, _, err := types.bindProperties(spec.Variables, spec.Required, nil)
+	properties, _, err := types.bindProperties(spec.Variables, spec.Required, false)
 	return properties, err
 }
 
@@ -1656,16 +1780,16 @@ func bindResource(token string, spec ResourceSpec, types *types,
 	if len(spec.Plain) > 0 {
 		return nil, errors.New("plain cannot be specified on resources")
 	}
-	if len(spec.PlainInputs) > 0 && !spec.IsComponent {
-		return nil, errors.New("plainInputs can only be specified on component resources")
+	if len(spec.PlainInputs) > 0 {
+		return nil, errors.New("plainInputs has been removed; individual property types must be marked as plain instead")
 	}
 
-	properties, _, err := types.bindProperties(spec.Properties, spec.Required, nil)
+	properties, _, err := types.bindProperties(spec.Properties, spec.Required, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to bind properties")
 	}
 
-	inputProperties, _, err := types.bindProperties(spec.InputProperties, spec.RequiredInputs, spec.PlainInputs)
+	inputProperties, _, err := types.bindProperties(spec.InputProperties, spec.RequiredInputs, true)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to bind properties")
 	}
@@ -1683,11 +1807,11 @@ func bindResource(token string, spec ResourceSpec, types *types,
 
 	var stateInputs *ObjectType
 	if spec.StateInputs != nil {
-		si, err := types.bindObjectType(token+"Args", *spec.StateInputs, false /*supportsPlainProperties*/)
+		si, err := types.bindObjectType(token+"Args", *spec.StateInputs)
 		if err != nil {
 			return nil, errors.Wrap(err, "error binding inputs")
 		}
-		stateInputs = si
+		stateInputs = si.InputShape
 	}
 
 	var aliases []*Alias
@@ -1786,7 +1910,7 @@ func bindResources(specs map[string]ResourceSpec, types *types,
 func bindFunction(token string, spec FunctionSpec, types *types) (*Function, error) {
 	var inputs *ObjectType
 	if spec.Inputs != nil {
-		ins, err := types.bindObjectType(token+"Args", *spec.Inputs, false /*supportsPlainProperties*/)
+		ins, err := types.bindObjectType(token+"Args", *spec.Inputs)
 		if err != nil {
 			return nil, errors.Wrap(err, "error binding inputs")
 		}
@@ -1795,7 +1919,7 @@ func bindFunction(token string, spec FunctionSpec, types *types) (*Function, err
 
 	var outputs *ObjectType
 	if spec.Outputs != nil {
-		outs, err := types.bindObjectType(token+"Result", *spec.Outputs, false /*supportsPlainProperties*/)
+		outs, err := types.bindObjectType(token+"Result", *spec.Outputs)
 		if err != nil {
 			return nil, errors.Wrap(err, "error binding inputs")
 		}
