@@ -142,7 +142,7 @@ func (g *generator) GenForExpression(w io.Writer, expr *model.ForExpression) { /
 
 func (g *generator) GenFunctionCallExpression(w io.Writer, expr *model.FunctionCallExpression) {
 	switch expr.Name {
-	case hcl2.IntrinsicInput:
+	case intrinsicInput:
 		isInput := true
 		// bypass passthrough __convert expressions that might require prefix: "pulumi.*"
 		if c, ok := expr.Args[0].(*model.FunctionCallExpression); ok && c.Name == hcl2.IntrinsicConvert {
@@ -258,6 +258,10 @@ func (g *generator) GenLiteralValueExpression(w io.Writer, expr *model.LiteralVa
 }
 
 func (g *generator) genLiteralValueExpression(w io.Writer, expr *model.LiteralValueExpression, destType model.Type) {
+	if cns, ok := destType.(*model.ConstType); ok {
+		destType = cns.Type
+	}
+
 	if destType == model.NoneType {
 		g.Fgen(w, "nil")
 		return
@@ -313,7 +317,7 @@ func (g *generator) genLiteralValueExpression(w io.Writer, expr *model.LiteralVa
 				break
 			}
 			switch t := t.(type) {
-			case *model.OpaqueType:
+			case *model.ConstType, *model.OpaqueType:
 				g.genLiteralValueExpression(w, expr, t)
 				didGenerate = true
 				break
@@ -505,7 +509,7 @@ func (g *generator) GenSplatExpression(w io.Writer, expr *model.SplatExpression)
 // GenTemplateExpression generates code for a TemplateExpression.
 func (g *generator) GenTemplateExpression(w io.Writer, expr *model.TemplateExpression) {
 	if len(expr.Parts) == 1 {
-		if lit, ok := expr.Parts[0].(*model.LiteralValueExpression); ok && lit.Type() == model.StringType {
+		if lit, ok := expr.Parts[0].(*model.LiteralValueExpression); ok && model.StringType.AssignableFrom(lit.Type()) {
 			g.GenLiteralValueExpression(w, lit)
 			return
 		}
@@ -566,6 +570,15 @@ func (g *generator) GenUnaryOpExpression(w io.Writer, expr *model.UnaryOpExpress
 
 // argumentTypeName computes the go type for the given expression and model type.
 func (g *generator) argumentTypeName(expr model.Expression, destType model.Type, isInput bool) string {
+	if cns, ok := destType.(*model.ConstType); ok {
+		destType = cns.Type
+	}
+
+	// This can happen with null literals.
+	if destType == model.NoneType {
+		return ""
+	}
+
 	var tokenRange hcl.Range
 	if expr != nil {
 		node := expr.SyntaxNode()
@@ -694,9 +707,13 @@ func (g *generator) argumentTypeName(expr model.Expression, destType model.Type,
 		for i, t := range destType.ElementTypes {
 			if i == 0 {
 				elmType = t
+				if cns, ok := elmType.(*model.ConstType); ok {
+					elmType = cns.Type
+				}
+				continue
 			}
 
-			if !elmType.Equals(t) {
+			if !elmType.AssignableFrom(t) {
 				elmType = nil
 				break
 			}
@@ -936,7 +953,7 @@ func (g *generator) literalKey(x model.Expression) (string, bool) {
 	strKey := ""
 	switch x := x.(type) {
 	case *model.LiteralValueExpression:
-		if x.Type() == model.StringType {
+		if model.StringType.AssignableFrom(x.Type()) {
 			strKey = x.Value.AsString()
 			break
 		}
@@ -945,7 +962,7 @@ func (g *generator) literalKey(x model.Expression) (string, bool) {
 		return buf.String(), true
 	case *model.TemplateExpression:
 		if len(x.Parts) == 1 {
-			if lit, ok := x.Parts[0].(*model.LiteralValueExpression); ok && lit.Type() == model.StringType {
+			if lit, ok := x.Parts[0].(*model.LiteralValueExpression); ok && model.StringType.AssignableFrom(lit.Type()) {
 				strKey = lit.Value.AsString()
 				break
 			}

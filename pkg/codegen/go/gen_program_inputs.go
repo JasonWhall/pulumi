@@ -5,6 +5,9 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/codegen/hcl2/model"
 )
 
+// intrinsicInput is the name of the input intrinsic.
+const intrinsicInput = "__input"
+
 // rewriteInputs wraps expressions in an __input intrinsic
 // used for generation of pulumi values for go such as pulumi.String("foo")
 func rewriteInputs(x model.Expression) model.Expression {
@@ -20,7 +23,7 @@ func stripInput(expr model.Expression) model.Expression {
 	switch expr := expr.(type) {
 	case *model.FunctionCallExpression:
 		switch expr.Name {
-		case hcl2.IntrinsicInput:
+		case intrinsicInput:
 			return expr.Args[0]
 		}
 	}
@@ -29,7 +32,7 @@ func stripInput(expr model.Expression) model.Expression {
 
 func applyInput(expr model.Expression) model.Expression {
 	return &model.FunctionCallExpression{
-		Name: hcl2.IntrinsicInput,
+		Name: intrinsicInput,
 		Signature: model.StaticFunctionSignature{
 			Parameters: []model.Parameter{
 				{
@@ -54,7 +57,7 @@ func modifyInputs(
 			x = modf(x)
 		}
 	case *model.FunctionCallExpression:
-		if expr.Name == hcl2.IntrinsicInput {
+		if expr.Name == intrinsicInput {
 			return x
 		}
 		switch expr.Name {
@@ -100,7 +103,7 @@ func containsInputs(x model.Expression) bool {
 	switch expr := x.(type) {
 	case *model.FunctionCallExpression:
 		switch expr.Name {
-		case hcl2.IntrinsicInput:
+		case intrinsicInput:
 			return true
 		}
 	case *model.TupleConsExpression:

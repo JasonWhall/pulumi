@@ -33,6 +33,10 @@ func TestGenProgram(t *testing.T) {
 			continue
 		}
 
+		if f.Name() != "aws-eks.pp" {
+			continue
+		}
+
 		t.Run(f.Name(), func(t *testing.T) {
 			path := filepath.Join(testdataPath, f.Name())
 			contents, err := ioutil.ReadFile(path)
