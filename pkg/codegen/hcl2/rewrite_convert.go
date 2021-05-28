@@ -261,7 +261,7 @@ func extractStringValue(arg model.Expression) (string, bool) {
 		return "", false
 	}
 	lit, ok := template.Parts[0].(*model.LiteralValueExpression)
-	if !ok || lit.Type() != model.StringType {
+	if !ok || model.StringType.ConversionFrom(lit.Type()) == model.NoConversion {
 		return "", false
 	}
 	return lit.Value.AsString(), true

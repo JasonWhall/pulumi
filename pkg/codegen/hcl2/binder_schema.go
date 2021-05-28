@@ -25,6 +25,7 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/codegen/hcl2/model"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
+	"github.com/zclconf/go-cty/cty"
 )
 
 type packageSchema struct {
@@ -168,11 +169,19 @@ func (b *binder) schemaTypeToTypeImpl(src schema.Type, seen map[schema.Type]mode
 		seen[src] = objType
 		for _, prop := range src.Properties {
 			t := b.schemaTypeToTypeImpl(prop.Type, seen)
-			if !prop.IsRequired || b.options.allowMissingProperties {
-				t = model.NewOptionalType(t)
-			}
 			if prop.ConstValue != nil {
-				t = model.NewConstType(t, prop.ConstValue)
+				var value cty.Value
+				switch v := prop.ConstValue.(type) {
+				case bool:
+					value = cty.BoolVal(v)
+				case float64:
+					value = cty.NumberFloatVal(v)
+				case string:
+					value = cty.StringVal(v)
+				default:
+					contract.Failf("unexpected constant type %T", v)
+				}
+				t = model.NewConstType(t, value)
 			}
 			properties[prop.Name] = t
 		}
@@ -190,6 +199,12 @@ func (b *binder) schemaTypeToTypeImpl(src schema.Type, seen map[schema.Type]mode
 			return model.NewUnionType(t, underlyingType)
 		}
 		return t
+	case *schema.InputType:
+		elementType := b.schemaTypeToTypeImpl(src.ElementType, seen)
+		return model.NewUnionType(elementType, model.NewOutputType(elementType))
+	case *schema.OptionalType:
+		elementType := b.schemaTypeToTypeImpl(src.ElementType, seen)
+		return model.NewOptionalType(elementType)
 	case *schema.UnionType:
 		types := make([]model.Type, len(src.ElementTypes))
 		for i, src := range src.ElementTypes {
