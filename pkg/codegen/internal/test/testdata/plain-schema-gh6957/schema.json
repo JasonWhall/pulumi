@@ -19,7 +19,8 @@
                     "description": "The HTML content for index.html."
                 },
                 "foo": {
-                    "$ref": "#/types/example:index:Foo"
+                    "$ref": "#/types/example:index:Foo",
+                    "plain": true
                 }
             },
             "requiredInputs": [
@@ -38,8 +39,7 @@
             "required": [
                 "bucket",
                 "websiteUrl"
-            ],
-            "plainInputs": ["foo"]
+            ]
         }
     },
     "language": {
