@@ -281,7 +281,7 @@ func (b *binder) bindResourceBody(node *Resource) hcl.Diagnostics {
 		for _, k := range codegen.SortedKeys(objectType.Properties) {
 			if !model.IsOptionalType(objectType.Properties[k]) && !attrNames.Has(k) {
 				diagnostics = append(diagnostics,
-					missingRequiredAttribute(k, node.Definition.Body.Syntax.MissingItemRange()))
+					missingRequiredAttribute(k, block.Body.Syntax.MissingItemRange()))
 			}
 		}
 	}
