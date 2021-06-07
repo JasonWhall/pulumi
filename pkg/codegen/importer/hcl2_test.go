@@ -291,32 +291,28 @@ func TestSimplerType(t *testing.T) {
 		&schema.ObjectType{
 			Properties: []*schema.Property{
 				{
-					Name:       "foo",
-					Type:       schema.BoolType,
-					IsRequired: true,
+					Name: "foo",
+					Type: schema.BoolType,
 				},
 			},
 		},
 		&schema.ObjectType{
 			Properties: []*schema.Property{
 				{
-					Name:       "foo",
-					Type:       schema.IntType,
-					IsRequired: true,
+					Name: "foo",
+					Type: schema.IntType,
 				},
 			},
 		},
 		&schema.ObjectType{
 			Properties: []*schema.Property{
 				{
-					Name:       "foo",
-					Type:       schema.IntType,
-					IsRequired: true,
+					Name: "foo",
+					Type: schema.IntType,
 				},
 				{
-					Name:       "bar",
-					Type:       schema.IntType,
-					IsRequired: true,
+					Name: "bar",
+					Type: schema.IntType,
 				},
 			},
 		},

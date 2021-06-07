@@ -86,3 +86,48 @@ func UnwrapType(t schema.Type) schema.Type {
 		}
 	}
 }
+
+// PlainType deeply removes any InputTypes from t.
+func PlainType(t schema.Type) schema.Type {
+	switch typ := t.(type) {
+	case *schema.InputType:
+		return PlainType(typ.ElementType)
+	case *schema.OptionalType:
+		e := PlainType(typ.ElementType)
+		if e == typ.ElementType {
+			return typ
+		}
+		return &schema.OptionalType{ElementType: e}
+	case *schema.ArrayType:
+		e := PlainType(typ.ElementType)
+		if e == typ.ElementType {
+			return typ
+		}
+		return &schema.ArrayType{ElementType: e}
+	case *schema.MapType:
+		e := PlainType(typ.ElementType)
+		if e == typ.ElementType {
+			return typ
+		}
+		return &schema.MapType{ElementType: e}
+	case *schema.ObjectType:
+		return typ
+	case *schema.UnionType:
+		elems, changed := make([]schema.Type, len(typ.ElementTypes)), false
+		for i, e := range typ.ElementTypes {
+			elems[i] = PlainType(e)
+			changed = changed || elems[i] != e
+		}
+		if !changed {
+			return typ
+		}
+		return &schema.UnionType{
+			ElementTypes:  elems,
+			DefaultType:   typ.DefaultType,
+			Discriminator: typ.Discriminator,
+			Mapping:       typ.Mapping,
+		}
+	default:
+		return t
+	}
+}

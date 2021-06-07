@@ -188,7 +188,7 @@ The StaticPage resource accepts the following [input]({{< relref "/docs/intro/co
 <a href="#foo_go" style="color: inherit; text-decoration: inherit;">Foo</a>
 </span>
         <span class="property-indicator"></span>
-        <span class="property-type"><a href="#foo">Foo</a></span>
+        <span class="property-type"><a href="#foo">Foo<wbr>Args</a></span>
     </dt>
     <dd>{{% md %}}{{% /md %}}</dd></dl>
 {{% /choosable %}}
