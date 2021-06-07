@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/hcl2"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/hcl2/model"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
@@ -230,7 +231,7 @@ func (g *generator) GenFunctionCallExpression(w io.Writer, expr *model.FunctionC
 	case "readFile":
 		g.genNYI(w, "ReadFile")
 	case "readDir":
-		contract.Failf("unlowered toJSON function expression @ %v", expr.SyntaxNode().Range())
+		contract.Failf("unlowered readDir function expression @ %v", expr.SyntaxNode().Range())
 	case "secret":
 		outputTypeName := "pulumi.Any"
 		if model.ResolveOutputs(expr.Type()) != model.DynamicType {
@@ -587,6 +588,8 @@ func (g *generator) argumentTypeName(expr model.Expression, destType model.Type,
 		}
 	}
 	if schemaType, ok := hcl2.GetSchemaForType(destType.(model.Type)); ok {
+		schemaType = codegen.UnwrapType(schemaType)
+
 		switch schemaType := schemaType.(type) {
 		case *schema.ArrayType:
 			token := schemaType.ElementType.(*schema.ObjectType).Token
@@ -632,8 +635,6 @@ func (g *generator) argumentTypeName(expr model.Expression, destType model.Type,
 				fmtString = "%s.%sArgs"
 			}
 			return fmt.Sprintf(fmtString, importPrefix, member)
-		default:
-			contract.Failf("unexpected schema type %T", schemaType)
 		}
 	}
 

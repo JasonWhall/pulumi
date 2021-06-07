@@ -201,7 +201,7 @@ func (b *binder) schemaTypeToTypeImpl(src schema.Type, seen map[schema.Type]mode
 		return t
 	case *schema.InputType:
 		elementType := b.schemaTypeToTypeImpl(src.ElementType, seen)
-		return model.NewUnionType(elementType, model.NewOutputType(elementType))
+		return model.NewUnionTypeAnnotated([]model.Type{elementType, model.NewOutputType(elementType)}, src)
 	case *schema.OptionalType:
 		elementType := b.schemaTypeToTypeImpl(src.ElementType, seen)
 		return model.NewOptionalType(elementType)
@@ -271,8 +271,11 @@ func GetSchemaForType(t model.Type) (schema.Type, bool) {
 		return GetSchemaForType(t.ElementType)
 	case *model.UnionType:
 		for _, a := range t.Annotations {
-			if t, ok := a.(*schema.UnionType); ok {
-				return t, true
+			switch a := a.(type) {
+			case *schema.UnionType:
+				return a, true
+			case *schema.InputType:
+				return a, true
 			}
 		}
 		schemas := codegen.Set{}
