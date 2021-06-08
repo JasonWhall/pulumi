@@ -87,35 +87,37 @@ func UnwrapType(t schema.Type) schema.Type {
 	}
 }
 
-// PlainType deeply removes any InputTypes from t.
-func PlainType(t schema.Type) schema.Type {
+func resolvedType(t schema.Type, plainObjects bool) schema.Type {
 	switch typ := t.(type) {
 	case *schema.InputType:
-		return PlainType(typ.ElementType)
+		return resolvedType(typ.ElementType, plainObjects)
 	case *schema.OptionalType:
-		e := PlainType(typ.ElementType)
+		e := resolvedType(typ.ElementType, plainObjects)
 		if e == typ.ElementType {
 			return typ
 		}
 		return &schema.OptionalType{ElementType: e}
 	case *schema.ArrayType:
-		e := PlainType(typ.ElementType)
+		e := resolvedType(typ.ElementType, plainObjects)
 		if e == typ.ElementType {
 			return typ
 		}
 		return &schema.ArrayType{ElementType: e}
 	case *schema.MapType:
-		e := PlainType(typ.ElementType)
+		e := resolvedType(typ.ElementType, plainObjects)
 		if e == typ.ElementType {
 			return typ
 		}
 		return &schema.MapType{ElementType: e}
 	case *schema.ObjectType:
-		return typ
+		if !plainObjects || !typ.IsInputShape() {
+			return typ
+		}
+		return typ.PlainShape
 	case *schema.UnionType:
 		elems, changed := make([]schema.Type, len(typ.ElementTypes)), false
 		for i, e := range typ.ElementTypes {
-			elems[i] = PlainType(e)
+			elems[i] = resolvedType(e, plainObjects)
 			changed = changed || elems[i] != e
 		}
 		if !changed {
@@ -130,4 +132,15 @@ func PlainType(t schema.Type) schema.Type {
 	default:
 		return t
 	}
+}
+
+// PlainType deeply removes any InputTypes from t, with the exception of argument structs. Use ResolvedType to
+// unwrap argument structs as well.
+func PlainType(t schema.Type) schema.Type {
+	return resolvedType(t, false)
+}
+
+// ResolvedType deeply removes any InputTypes from t.
+func ResolvedType(t schema.Type) schema.Type {
+	return resolvedType(t, true)
 }

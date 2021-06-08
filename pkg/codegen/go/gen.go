@@ -107,6 +107,10 @@ type pkgContext struct {
 }
 
 func (pkg *pkgContext) detailsForType(t schema.Type) *typeDetails {
+	if obj, ok := t.(*schema.ObjectType); ok && obj.IsInputShape() {
+		t = obj.PlainShape
+	}
+
 	details, ok := pkg.typeDetails[t]
 	if !ok {
 		details = &typeDetails{}
@@ -216,8 +220,14 @@ func resourceName(r *schema.Resource) string {
 
 func isNilType(t schema.Type) bool {
 	switch t := t.(type) {
-	case *schema.OptionalType, *schema.InputType, *schema.ArrayType, *schema.MapType:
+	case *schema.OptionalType, *schema.ArrayType, *schema.MapType, *schema.ResourceType:
 		return true
+	case *schema.InputType:
+		// Enums are value types.
+		//
+		// FIXME: enum inputs are not proper inputs: they do not accept output values.
+		_, isEnum := t.ElementType.(*schema.EnumType)
+		return !isEnum
 	case *schema.TokenType:
 		// Use the underlying type for now.
 		if t.UnderlyingType != nil {
@@ -251,7 +261,7 @@ func (pkg *pkgContext) inputType(t schema.Type) (result string) {
 		}()
 	}
 
-	switch t := t.(type) {
+	switch t := codegen.SimplifyInputUnion(t).(type) {
 	case *schema.OptionalType:
 		return pkg.typeString(t)
 	case *schema.InputType:
@@ -266,6 +276,9 @@ func (pkg *pkgContext) inputType(t schema.Type) (result string) {
 		en := pkg.inputType(t.ElementType)
 		return strings.TrimSuffix(en, "Input") + "MapInput"
 	case *schema.ObjectType:
+		if pkg.pkg.Name != "main" && t.IsInputShape() {
+			t = t.PlainShape
+		}
 		return pkg.resolveObjectType(t) + "Input"
 	case *schema.ResourceType:
 		return pkg.resolveResourceType(t) + "Input"
@@ -337,13 +350,13 @@ func (pkg *pkgContext) typeString(t schema.Type) string {
 		return pkg.typeString(t.ElementType)
 	case *schema.ArrayType:
 		typ := "[]"
-		if pkg.isExternalReference(t.ElementType) {
+		if pkg.isExternalObjectType(t.ElementType) {
 			typ += "*"
 		}
 		return typ + pkg.typeString(t.ElementType)
 	case *schema.MapType:
 		typ := "map[string]"
-		if pkg.isExternalReference(t.ElementType) {
+		if pkg.isExternalObjectType(t.ElementType) {
 			typ += "*"
 		}
 		return typ + pkg.typeString(t.ElementType)
@@ -399,6 +412,11 @@ func (pkg *pkgContext) isExternalReference(t schema.Type) bool {
 		return typ.Resource != nil && pkg.pkg != nil && typ.Resource.Package != pkg.pkg
 	}
 	return false
+}
+
+func (pkg *pkgContext) isExternalObjectType(t schema.Type) bool {
+	obj, ok := t.(*schema.ObjectType)
+	return ok && obj.Package != nil && pkg.pkg != nil && obj.Package != pkg.pkg
 }
 
 // resolveResourceType resolves resource references in properties while
@@ -459,8 +477,6 @@ func (pkg *pkgContext) resolveObjectType(t *schema.ObjectType) string {
 
 func (pkg *pkgContext) outputType(t schema.Type) string {
 	switch t := t.(type) {
-	case *schema.InputType:
-		return pkg.outputType(t.ElementType)
 	case *schema.OptionalType:
 		elem := pkg.outputType(t.ElementType)
 		if isNilType(t.ElementType) {
@@ -843,12 +859,14 @@ func (pkg *pkgContext) genPlainType(w io.Writer, name, comment, deprecationMessa
 	fmt.Fprintf(w, "type %s struct {\n", name)
 	for _, p := range properties {
 		printCommentWithDeprecationMessage(w, p.Comment, p.DeprecationMessage, true)
-		fmt.Fprintf(w, "\t%s %s `pulumi:\"%s\"`\n", Title(p.Name), pkg.typeString(p.Type), p.Name)
+		fmt.Fprintf(w, "\t%s %s `pulumi:\"%s\"`\n", Title(p.Name), pkg.typeString(codegen.ResolvedType(p.Type)), p.Name)
 	}
 	fmt.Fprintf(w, "}\n\n")
 }
 
 func (pkg *pkgContext) genInputTypes(w io.Writer, t *schema.ObjectType, details *typeDetails) {
+	contract.Assert(t.IsInputShape())
+
 	name := pkg.tokenToType(t.Token)
 
 	// Generate the plain inputs.
@@ -917,6 +935,8 @@ func genOutputMethods(w io.Writer, name, elementType string, resourceType bool) 
 }
 
 func (pkg *pkgContext) genOutputTypes(w io.Writer, t *schema.ObjectType, details *typeDetails) {
+	contract.Assert(!t.IsInputShape())
+
 	name := pkg.tokenToType(t.Token)
 
 	printComment(w, t.Comment, false)
@@ -1066,7 +1086,7 @@ func (pkg *pkgContext) getDefaultValue(dv *schema.DefaultValue, t schema.Type) (
 		pkg.needsUtils = true
 
 		parser, typDefault, typ := "nil", "\"\"", "string"
-		switch t.(type) {
+		switch codegen.UnwrapType(t).(type) {
 		case *schema.ArrayType:
 			parser, typDefault, typ = "parseEnvStringArray", "pulumi.StringArray{}", "pulumi.StringArray"
 		}
@@ -1143,7 +1163,7 @@ func (pkg *pkgContext) genResource(w io.Writer, r *schema.Resource, generateReso
 
 	// Produce the inputs.
 	for _, p := range r.InputProperties {
-		switch p.Type.(type) {
+		switch codegen.UnwrapType(p.Type).(type) {
 		case *schema.EnumType:
 			// not a pointer type and already handled above
 		default:
@@ -1180,7 +1200,7 @@ func (pkg *pkgContext) genResource(w io.Writer, r *schema.Resource, generateReso
 				t = "pulumi.Any"
 			}
 
-			switch typ := p.Type.(type) {
+			switch typ := codegen.UnwrapType(p.Type).(type) {
 			case *schema.EnumType:
 				if p.IsRequired() {
 					switch typ.ElementType {
@@ -1277,16 +1297,20 @@ func (pkg *pkgContext) genResource(w io.Writer, r *schema.Resource, generateReso
 		// Emit the state types for get methods.
 		fmt.Fprintf(w, "// Input properties used for looking up and filtering %s resources.\n", name)
 		fmt.Fprintf(w, "type %sState struct {\n", camel(name))
-		for _, p := range r.Properties {
-			printCommentWithDeprecationMessage(w, p.Comment, p.DeprecationMessage, true)
-			fmt.Fprintf(w, "\t%s %s `pulumi:\"%s\"`\n", Title(p.Name), pkg.typeString(codegen.OptionalType(p)), p.Name)
+		if r.StateInputs != nil {
+			for _, p := range r.StateInputs.Properties {
+				printCommentWithDeprecationMessage(w, p.Comment, p.DeprecationMessage, true)
+				fmt.Fprintf(w, "\t%s %s `pulumi:\"%s\"`\n", Title(p.Name), pkg.typeString(codegen.OptionalType(p)), p.Name)
+			}
 		}
 		fmt.Fprintf(w, "}\n\n")
 
 		fmt.Fprintf(w, "type %sState struct {\n", name)
-		for _, p := range r.Properties {
-			printCommentWithDeprecationMessage(w, p.Comment, p.DeprecationMessage, true)
-			fmt.Fprintf(w, "\t%s %s\n", Title(p.Name), pkg.inputType(p.Type))
+		if r.StateInputs != nil {
+			for _, p := range r.StateInputs.Properties {
+				printCommentWithDeprecationMessage(w, p.Comment, p.DeprecationMessage, true)
+				fmt.Fprintf(w, "\t%s %s\n", Title(p.Name), pkg.inputType(p.Type))
+			}
 		}
 		fmt.Fprintf(w, "}\n\n")
 
@@ -1299,7 +1323,7 @@ func (pkg *pkgContext) genResource(w io.Writer, r *schema.Resource, generateReso
 	fmt.Fprintf(w, "type %sArgs struct {\n", camel(name))
 	for _, p := range r.InputProperties {
 		printCommentWithDeprecationMessage(w, p.Comment, p.DeprecationMessage, true)
-		fmt.Fprintf(w, "\t%s %s `pulumi:\"%s\"`\n", Title(p.Name), pkg.typeString(p.Type), p.Name)
+		fmt.Fprintf(w, "\t%s %s `pulumi:\"%s\"`\n", Title(p.Name), pkg.typeString(codegen.ResolvedType(p.Type)), p.Name)
 	}
 	fmt.Fprintf(w, "}\n\n")
 
@@ -1307,7 +1331,7 @@ func (pkg *pkgContext) genResource(w io.Writer, r *schema.Resource, generateReso
 	fmt.Fprintf(w, "type %sArgs struct {\n", name)
 	for _, p := range r.InputProperties {
 		printCommentWithDeprecationMessage(w, p.Comment, p.DeprecationMessage, true)
-		fmt.Fprintf(w, "\t%s %s\n", Title(p.Name), pkg.inputType(p.Type))
+		fmt.Fprintf(w, "\t%s %s\n", Title(p.Name), pkg.typeString(p.Type))
 	}
 	fmt.Fprintf(w, "}\n\n")
 
@@ -1469,8 +1493,10 @@ func (pkg *pkgContext) genFunction(w io.Writer, f *schema.Function) {
 }
 
 func (pkg *pkgContext) genType(w io.Writer, obj *schema.ObjectType) {
+	contract.Assert(!obj.IsInputShape())
+
 	pkg.genPlainType(w, pkg.tokenToType(obj.Token), obj.Comment, "", obj.Properties)
-	pkg.genInputTypes(w, obj, pkg.detailsForType(obj))
+	pkg.genInputTypes(w, obj.InputShape, pkg.detailsForType(obj))
 	pkg.genOutputTypes(w, obj, pkg.detailsForType(obj))
 }
 
@@ -1506,6 +1532,8 @@ func (pkg *pkgContext) genNestedCollectionType(w io.Writer, typ schema.Type) []s
 		elementTypeName = pkg.nestedTypeToType(t.ElementType)
 		elementTypeName += "Map"
 		names = pkg.addSuffixesToName(t, elementTypeName)
+	default:
+		contract.Failf("unexpected type %T in genNestedCollectionType", t)
 	}
 
 	for _, name := range names {
@@ -1544,11 +1572,13 @@ func (pkg *pkgContext) genNestedCollectionType(w io.Writer, typ schema.Type) []s
 }
 
 func (pkg *pkgContext) nestedTypeToType(typ schema.Type) string {
-	switch t := typ.(type) {
+	switch t := codegen.UnwrapType(typ).(type) {
 	case *schema.ArrayType:
 		return pkg.nestedTypeToType(t.ElementType)
 	case *schema.MapType:
 		return pkg.nestedTypeToType(t.ElementType)
+	case *schema.ObjectType:
+		return pkg.resolveObjectType(t)
 	}
 	return pkg.tokenToType(typ.String())
 }
@@ -1990,7 +2020,7 @@ func generatePackageContextMap(tool string, pkg *schema.Package, goInfo GoPackag
 
 	var getPkgFromType func(schema.Type) *pkgContext
 	getPkgFromType = func(typ schema.Type) *pkgContext {
-		switch t := typ.(type) {
+		switch t := codegen.UnwrapType(typ).(type) {
 		case *schema.ArrayType:
 			return getPkgFromType(t.ElementType)
 		case *schema.MapType:
@@ -2019,6 +2049,10 @@ func generatePackageContextMap(tool string, pkg *schema.Package, goInfo GoPackag
 
 	populateDetailsForTypes = func(seen codegen.StringSet, schemaType schema.Type, isRequired bool, parentOptional bool) {
 		switch typ := schemaType.(type) {
+		case *schema.InputType:
+			populateDetailsForTypes(seen, typ.ElementType, isRequired, parentOptional)
+		case *schema.OptionalType:
+			populateDetailsForTypes(seen, typ.ElementType, false, true)
 		case *schema.ObjectType:
 			pkg := getPkgFromToken(typ.Token)
 			if !isRequired || parentOptional {
@@ -2045,14 +2079,14 @@ func generatePackageContextMap(tool string, pkg *schema.Package, goInfo GoPackag
 				return
 			}
 			seen.Add(typ.String())
-			getPkgFromType(typ.ElementType).detailsForType(typ.ElementType).arrayElement = true
+			getPkgFromType(typ.ElementType).detailsForType(codegen.UnwrapType(typ.ElementType)).arrayElement = true
 			populateDetailsForTypes(seen, typ.ElementType, true, false)
 		case *schema.MapType:
 			if seen.Has(typ.String()) {
 				return
 			}
 			seen.Add(typ.String())
-			getPkgFromType(typ.ElementType).detailsForType(typ.ElementType).mapElement = true
+			getPkgFromType(typ.ElementType).detailsForType(codegen.UnwrapType(typ.ElementType)).mapElement = true
 			populateDetailsForTypes(seen, typ.ElementType, true, false)
 		}
 	}
@@ -2069,7 +2103,9 @@ func generatePackageContextMap(tool string, pkg *schema.Package, goInfo GoPackag
 			getPkgFromType(typ.ElementType).detailsForType(typ.ElementType).mapElement = true
 		case *schema.ObjectType:
 			pkg := getPkgFromToken(typ.Token)
-			pkg.types = append(pkg.types, typ)
+			if !typ.IsInputShape() {
+				pkg.types = append(pkg.types, typ)
+			}
 			populateDetailsForPropertyTypes(seenMap, typ.Properties, false)
 		case *schema.EnumType:
 			pkg := getPkgFromToken(typ.Token)
