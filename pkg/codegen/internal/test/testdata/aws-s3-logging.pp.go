@@ -12,7 +12,7 @@ func main() {
 			return err
 		}
 		bucket, err := s3.NewBucket(ctx, "bucket", &s3.BucketArgs{
-			Loggings: s3.BucketLoggingArray{
+			Loggings: s3.BucketLoggingArgsArray{
 				&s3.BucketLoggingArgs{
 					TargetBucket: logs.Bucket,
 				},
@@ -21,7 +21,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		ctx.Export("targetBucket", bucket.Loggings.ApplyT(func(loggings []s3.BucketLogging) (string, error) {
+		ctx.Export("targetBucket", bucket.Loggings.ApplyT(func(loggings []*s3.BucketLogging) (string, error) {
 			return loggings[0].TargetBucket, nil
 		}).(pulumi.StringOutput))
 		return nil

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 
+	"github.com/pulumi/pulumi-aws/sdk/v2/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v2/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v2/go/aws/ecs"
 	"github.com/pulumi/pulumi-aws/sdk/v2/go/aws/elasticloadbalancingv2"
@@ -27,7 +28,7 @@ func main() {
 		}
 		webSecurityGroup, err := ec2.NewSecurityGroup(ctx, "webSecurityGroup", &ec2.SecurityGroupArgs{
 			VpcId: pulumi.String(vpc.Id),
-			Egress: ec2.SecurityGroupEgressArray{
+			Egress: ec2.SecurityGroupEgressArgsArray{
 				&ec2.SecurityGroupEgressArgs{
 					Protocol: pulumi.String("-1"),
 					FromPort: pulumi.Int(0),
@@ -37,7 +38,7 @@ func main() {
 					},
 				},
 			},
-			Ingress: ec2.SecurityGroupIngressArray{
+			Ingress: ec2.SecurityGroupIngressArgsArray{
 				&ec2.SecurityGroupIngressArgs{
 					Protocol: pulumi.String("tcp"),
 					FromPort: pulumi.Int(80),
@@ -86,7 +87,7 @@ func main() {
 			return err
 		}
 		webLoadBalancer, err := elasticloadbalancingv2.NewLoadBalancer(ctx, "webLoadBalancer", &elasticloadbalancingv2.LoadBalancerArgs{
-			Subnets: toPulumiStringArray(subnets.Ids),
+			Subnets: subnets.Ids,
 			SecurityGroups: pulumi.StringArray{
 				webSecurityGroup.ID(),
 			},
@@ -106,7 +107,7 @@ func main() {
 		webListener, err := elasticloadbalancingv2.NewListener(ctx, "webListener", &elasticloadbalancingv2.ListenerArgs{
 			LoadBalancerArn: webLoadBalancer.Arn,
 			Port:            pulumi.Int(80),
-			DefaultActions: elasticloadbalancingv2.ListenerDefaultActionArray{
+			DefaultActions: elasticloadbalancingv2.ListenerDefaultActionArgsArray{
 				&elasticloadbalancingv2.ListenerDefaultActionArgs{
 					Type:           pulumi.String("forward"),
 					TargetGroupArn: webTargetGroup.Arn,
@@ -154,12 +155,12 @@ func main() {
 			TaskDefinition: appTask.Arn,
 			NetworkConfiguration: &ecs.ServiceNetworkConfigurationArgs{
 				AssignPublicIp: pulumi.Bool(true),
-				Subnets:        toPulumiStringArray(subnets.Ids),
+				Subnets:        subnets.Ids,
 				SecurityGroups: pulumi.StringArray{
 					webSecurityGroup.ID(),
 				},
 			},
-			LoadBalancers: ecs.ServiceLoadBalancerArray{
+			LoadBalancers: ecs.ServiceLoadBalancerArgsArray{
 				&ecs.ServiceLoadBalancerArgs{
 					TargetGroupArn: webTargetGroup.Arn,
 					ContainerName:  pulumi.String("my-app"),
@@ -175,11 +176,4 @@ func main() {
 		ctx.Export("url", webLoadBalancer.DnsName)
 		return nil
 	})
-}
-func toPulumiStringArray(arr []string) pulumi.StringArray {
-	var pulumiArr pulumi.StringArray
-	for _, v := range arr {
-		pulumiArr = append(pulumiArr, pulumi.String(v))
-	}
-	return pulumiArr
 }

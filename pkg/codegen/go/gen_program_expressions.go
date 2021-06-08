@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/hcl2"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/hcl2/model"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
@@ -64,13 +65,14 @@ func (g *generator) GetPrecedence(expr model.Expression) int {
 
 // GenAnonymousFunctionExpression generates code for an AnonymousFunctionExpression.
 func (g *generator) GenAnonymousFunctionExpression(w io.Writer, expr *model.AnonymousFunctionExpression) {
-	g.genAnonymousFunctionExpression(w, expr, nil)
+	g.genAnonymousFunctionExpression(w, expr, nil, false)
 }
 
 func (g *generator) genAnonymousFunctionExpression(
 	w io.Writer,
 	expr *model.AnonymousFunctionExpression,
 	bodyPreamble []string,
+	inApply bool,
 ) {
 	g.Fgenf(w, "func(")
 	leadingSep := ""
@@ -80,16 +82,20 @@ func (g *generator) genAnonymousFunctionExpression(
 		leadingSep = ", "
 	}
 
-	isInput := isInputty(expr.Signature.ReturnType)
-	retType := g.argumentTypeName(nil, expr.Signature.ReturnType, isInput)
-	g.Fgenf(w, ") (%s, error) {\n", retType)
+	retType := expr.Signature.ReturnType
+	if inApply {
+		retType = model.ResolveOutputs(retType)
+	}
+
+	retTypeName := g.argumentTypeName(nil, retType, false)
+	g.Fgenf(w, ") (%s, error) {\n", retTypeName)
 
 	for _, decl := range bodyPreamble {
 		g.Fgenf(w, "%s\n", decl)
 	}
 
-	body, temps := g.lowerExpression(expr.Body, expr.Signature.ReturnType, isInput)
-	g.genTempsMultiReturn(w, temps, retType)
+	body, temps := g.lowerExpression(expr.Body, retType)
+	g.genTempsMultiReturn(w, temps, retTypeName)
 
 	g.Fgenf(w, "return %v, nil", body)
 	g.Fgenf(w, "\n}")
@@ -142,29 +148,6 @@ func (g *generator) GenForExpression(w io.Writer, expr *model.ForExpression) { /
 
 func (g *generator) GenFunctionCallExpression(w io.Writer, expr *model.FunctionCallExpression) {
 	switch expr.Name {
-	case intrinsicInput:
-		isInput := true
-		// bypass passthrough __convert expressions that might require prefix: "pulumi.*"
-		if c, ok := expr.Args[0].(*model.FunctionCallExpression); ok && c.Name == hcl2.IntrinsicConvert {
-			switch c := c.Args[0].(type) {
-			case *model.RelativeTraversalExpression, *model.ScopeTraversalExpression:
-				expr.Args[0] = c
-				g.GenFunctionCallExpression(w, expr)
-				return
-			}
-		}
-		switch arg := expr.Args[0].(type) {
-		case *model.RelativeTraversalExpression:
-			g.genRelativeTraversalExpression(w, arg, isInput)
-		case *model.ScopeTraversalExpression:
-			g.genScopeTraversalExpression(w, arg, isInput)
-		case *model.ObjectConsExpression:
-			g.genObjectConsExpression(w, arg, expr.Type(), isInput)
-		default:
-			argType := g.argumentTypeName(arg, arg.Type(), isInput)
-			g.Fgenf(w, "%s(%v", argType, arg)
-			g.Fgenf(w, ")")
-		}
 	case hcl2.IntrinsicConvert:
 		switch arg := expr.Args[0].(type) {
 		case *model.TupleConsExpression:
@@ -174,8 +157,12 @@ func (g *generator) GenFunctionCallExpression(w io.Writer, expr *model.FunctionC
 			g.genObjectConsExpression(w, arg, expr.Type(), isInput)
 		case *model.LiteralValueExpression:
 			g.genLiteralValueExpression(w, arg, expr.Type())
+		case *model.TemplateExpression:
+			g.genTemplateExpression(w, arg, expr.Type())
+		case *model.ScopeTraversalExpression:
+			g.genScopeTraversalExpression(w, arg, expr.Type())
 		default:
-			g.Fgenf(w, "%.v", expr.Args[0]) // <- probably wrong w.r.t. precedence
+			g.Fgenf(w, "%.v", expr.Args[0])
 		}
 	case hcl2.IntrinsicApply:
 		g.genApply(w, expr)
@@ -258,11 +245,12 @@ func (g *generator) GenLiteralValueExpression(w io.Writer, expr *model.LiteralVa
 }
 
 func (g *generator) genLiteralValueExpression(w io.Writer, expr *model.LiteralValueExpression, destType model.Type) {
-	if cns, ok := destType.(*model.ConstType); ok {
-		destType = cns.Type
+	exprType := expr.Type()
+	if cns, ok := exprType.(*model.ConstType); ok {
+		exprType = cns.Type
 	}
 
-	if destType == model.NoneType {
+	if exprType == model.NoneType {
 		g.Fgen(w, "nil")
 		return
 	}
@@ -270,61 +258,41 @@ func (g *generator) genLiteralValueExpression(w io.Writer, expr *model.LiteralVa
 	argTypeName := g.argumentTypeName(expr, destType, false)
 	isPulumiType := strings.HasPrefix(argTypeName, "pulumi.")
 
-	switch destType := destType.(type) {
-	case *model.OpaqueType:
-		switch destType {
-		case model.BoolType:
-			if isPulumiType {
-				g.Fgenf(w, "%s(%v)", argTypeName, expr.Value.True())
-			} else {
-				g.Fgenf(w, "%v", expr.Value.True())
-			}
-		case model.NumberType, model.IntType:
-			bf := expr.Value.AsBigFloat()
-			if i, acc := bf.Int64(); acc == big.Exact {
-				if isPulumiType {
-					g.Fgenf(w, "%s(%d)", argTypeName, i)
-				} else {
-					g.Fgenf(w, "%d", i)
-				}
-
-			} else {
-				f, _ := bf.Float64()
-				if isPulumiType {
-					g.Fgenf(w, "%s(%g)", argTypeName, f)
-				} else {
-					g.Fgenf(w, "%g", f)
-				}
-			}
-		case model.StringType:
-			strVal := expr.Value.AsString()
-			if isPulumiType {
-				g.Fgenf(w, "%s(", argTypeName)
-				g.genStringLiteral(w, strVal)
-				g.Fgenf(w, ")")
-			} else {
-				g.genStringLiteral(w, strVal)
-			}
-		default:
-			contract.Failf("unexpected opaque type in GenLiteralValueExpression: %v (%v)", destType,
-				expr.SyntaxNode().Range())
+	switch exprType {
+	case model.BoolType:
+		if isPulumiType {
+			g.Fgenf(w, "%s(%v)", argTypeName, expr.Value.True())
+		} else {
+			g.Fgenf(w, "%v", expr.Value.True())
 		}
-	// handles the __convert intrinsic assuming that the union type will have an opaque type containing the dest type
-	case *model.UnionType:
-		var didGenerate bool
-		for _, t := range destType.ElementTypes {
-			if didGenerate {
-				break
+	case model.NumberType, model.IntType:
+		bf := expr.Value.AsBigFloat()
+		if i, acc := bf.Int64(); acc == big.Exact {
+			if isPulumiType {
+				g.Fgenf(w, "%s(%d)", argTypeName, i)
+			} else {
+				g.Fgenf(w, "%d", i)
 			}
-			switch t := t.(type) {
-			case *model.ConstType, *model.OpaqueType:
-				g.genLiteralValueExpression(w, expr, t)
-				didGenerate = true
-				break
+
+		} else {
+			f, _ := bf.Float64()
+			if isPulumiType {
+				g.Fgenf(w, "%s(%g)", argTypeName, f)
+			} else {
+				g.Fgenf(w, "%g", f)
 			}
+		}
+	case model.StringType:
+		strVal := expr.Value.AsString()
+		if isPulumiType {
+			g.Fgenf(w, "%s(", argTypeName)
+			g.genStringLiteral(w, strVal)
+			g.Fgenf(w, ")")
+		} else {
+			g.genStringLiteral(w, strVal)
 		}
 	default:
-		contract.Failf("unexpected destType in GenLiteralValueExpression: %v (%v)", destType,
+		contract.Failf("unexpected opaque type in GenLiteralValueExpression: %v (%v)", destType,
 			expr.SyntaxNode().Range())
 	}
 }
@@ -340,59 +308,68 @@ func (g *generator) genObjectConsExpression(
 	destType model.Type,
 	isInput bool,
 ) {
-	if len(expr.Items) > 0 {
-		var temps []interface{}
-		isInput = isInput || isInputty(destType)
-		typeName := g.argumentTypeName(expr, destType, isInput)
-		if strings.HasSuffix(typeName, "Args") {
-			isInput = true
-		}
-		// invokes are not inputty
-		if strings.Contains(typeName, ".Lookup") || strings.Contains(typeName, ".Get") {
-			isInput = false
-		}
-		isMap := strings.HasPrefix(typeName, "map[")
-
-		// TODO: retrieve schema and propagate optionals to emit bool ptr, etc.
-
-		// first lower all inner expressions and emit temps
-		for i, item := range expr.Items {
-			// don't treat keys as inputs
-			k, kTemps := g.lowerExpression(item.Key, item.Key.Type(), false)
-			temps = append(temps, kTemps...)
-			item.Key = k
-			x, xTemps := g.lowerExpression(item.Value, item.Value.Type(), isInput)
-			temps = append(temps, xTemps...)
-			item.Value = x
-			expr.Items[i] = item
-		}
-		g.genTemps(w, temps)
-
-		if isMap || !strings.HasSuffix(typeName, "Args") {
-			g.Fgenf(w, "%s", typeName)
-		} else {
-			g.Fgenf(w, "&%s", typeName)
-		}
-		g.Fgenf(w, "{\n")
-
-		for _, item := range expr.Items {
-			if lit, ok := g.literalKey(item.Key); ok {
-				if isMap || strings.HasSuffix(typeName, "Map") {
-					g.Fgenf(w, "\"%s\"", lit)
-				} else {
-					g.Fgenf(w, "%s", Title(lit))
-				}
-			} else {
-				g.Fgenf(w, "%.v", item.Key)
-			}
-
-			g.Fgenf(w, ": %.v,\n", item.Value)
-		}
-
-		g.Fgenf(w, "}")
-	} else {
+	if len(expr.Items) == 0 {
 		g.Fgenf(w, "nil")
+		return
 	}
+
+	var temps []interface{}
+	isInput = isInput || isInputty(destType)
+	typeName := g.argumentTypeName(expr, destType, isInput)
+	if schemaType, ok := hcl2.GetSchemaForType(destType); ok {
+		if obj, ok := codegen.UnwrapType(schemaType).(*schema.ObjectType); ok {
+			if g.useLookupInvokeForm(obj.Token) {
+				typeName = strings.Replace(typeName, ".Get", ".Lookup", 1)
+			}
+		}
+	}
+
+	if strings.HasSuffix(typeName, "Args") {
+		isInput = true
+	}
+	// invokes are not inputty
+	if strings.Contains(typeName, ".Lookup") || strings.Contains(typeName, ".Get") {
+		isInput = false
+	}
+	isMap := strings.HasPrefix(typeName, "map[")
+
+	// TODO: retrieve schema and propagate optionals to emit bool ptr, etc.
+
+	// first lower all inner expressions and emit temps
+	for i, item := range expr.Items {
+		// don't treat keys as inputs
+		k, kTemps := g.lowerExpression(item.Key, item.Key.Type())
+		temps = append(temps, kTemps...)
+		item.Key = k
+		x, xTemps := g.lowerExpression(item.Value, item.Value.Type())
+		temps = append(temps, xTemps...)
+		item.Value = x
+		expr.Items[i] = item
+	}
+	g.genTemps(w, temps)
+
+	if isMap || !strings.HasSuffix(typeName, "Args") {
+		g.Fgenf(w, "%s", typeName)
+	} else {
+		g.Fgenf(w, "&%s", typeName)
+	}
+	g.Fgenf(w, "{\n")
+
+	for _, item := range expr.Items {
+		if lit, ok := g.literalKey(item.Key); ok {
+			if isMap || strings.HasSuffix(typeName, "Map") {
+				g.Fgenf(w, "\"%s\"", lit)
+			} else {
+				g.Fgenf(w, "%s", Title(lit))
+			}
+		} else {
+			g.Fgenf(w, "%.v", item.Key)
+		}
+
+		g.Fgenf(w, ": %.v,\n", item.Value)
+	}
+
+	g.Fgenf(w, "}")
 }
 
 func (g *generator) genRelativeTraversalExpression(w io.Writer, expr *model.RelativeTraversalExpression, isInput bool) {
@@ -426,11 +403,10 @@ func (g *generator) GenRelativeTraversalExpression(w io.Writer, expr *model.Rela
 }
 
 func (g *generator) GenScopeTraversalExpression(w io.Writer, expr *model.ScopeTraversalExpression) {
-	isInput := false
-	g.genScopeTraversalExpression(w, expr, isInput)
+	g.genScopeTraversalExpression(w, expr, expr.Type())
 }
 
-func (g *generator) genScopeTraversalExpression(w io.Writer, expr *model.ScopeTraversalExpression, isInput bool) {
+func (g *generator) genScopeTraversalExpression(w io.Writer, expr *model.ScopeTraversalExpression, destType model.Type) {
 	rootName := expr.RootName
 
 	if _, ok := expr.Parts[0].(*model.SplatVariable); ok {
@@ -438,6 +414,11 @@ func (g *generator) genScopeTraversalExpression(w io.Writer, expr *model.ScopeTr
 	}
 
 	genIDCall := false
+
+	isInput := false
+	if schemaType, ok := hcl2.GetSchemaForType(destType); ok {
+		_, isInput = schemaType.(*schema.InputType)
+	}
 
 	if resource, ok := expr.Parts[0].(*hcl2.Resource); ok {
 		isInput = false
@@ -455,22 +436,26 @@ func (g *generator) genScopeTraversalExpression(w io.Writer, expr *model.ScopeTr
 	if isInput {
 		argType := g.argumentTypeName(expr, expr.Type(), isInput)
 		if strings.HasSuffix(argType, "Array") {
-			// use a helper to transform prompt arrays into inputty arrays
-			var helper *promptToInputArrayHelper
-			if h, ok := g.arrayHelpers[argType]; ok {
-				helper = h
-			} else {
-				// helpers are emitted at the end in the postamble step
-				helper = &promptToInputArrayHelper{
-					destType: argType,
+			destTypeName := g.argumentTypeName(expr, destType, isInput)
+			if argType != destTypeName {
+				// use a helper to transform prompt arrays into inputty arrays
+				var helper *promptToInputArrayHelper
+				if h, ok := g.arrayHelpers[argType]; ok {
+					helper = h
+				} else {
+					// helpers are emitted at the end in the postamble step
+					helper = &promptToInputArrayHelper{
+						destType: argType,
+					}
+					g.arrayHelpers[argType] = helper
 				}
-				g.arrayHelpers[argType] = helper
+				g.Fgenf(w, "%s(", helper.getFnName())
+				defer g.Fgenf(w, ")")
 			}
-			g.Fgenf(w, "%s(", helper.getFnName())
 		} else {
 			g.Fgenf(w, "%s(", g.argumentTypeName(expr, expr.Type(), isInput))
+			defer g.Fgenf(w, ")")
 		}
-
 	}
 
 	// TODO: this isn't exhaustively correct as "range" could be a legit var name
@@ -492,10 +477,6 @@ func (g *generator) genScopeTraversalExpression(w io.Writer, expr *model.ScopeTr
 		g.genRelativeTraversal(w, expr.Traversal.SimpleSplit().Rel, expr.Parts[1:], isRootResource)
 	}
 
-	if isInput {
-		g.Fgenf(w, ")")
-	}
-
 	if genIDCall {
 		g.Fgenf(w, ".ID()")
 	}
@@ -508,12 +489,23 @@ func (g *generator) GenSplatExpression(w io.Writer, expr *model.SplatExpression)
 
 // GenTemplateExpression generates code for a TemplateExpression.
 func (g *generator) GenTemplateExpression(w io.Writer, expr *model.TemplateExpression) {
+	g.genTemplateExpression(w, expr, expr.Type())
+}
+
+func (g *generator) genTemplateExpression(w io.Writer, expr *model.TemplateExpression, destType model.Type) {
 	if len(expr.Parts) == 1 {
 		if lit, ok := expr.Parts[0].(*model.LiteralValueExpression); ok && model.StringType.AssignableFrom(lit.Type()) {
-			g.GenLiteralValueExpression(w, lit)
+			g.genLiteralValueExpression(w, lit, destType)
 			return
 		}
 	} else {
+		argTypeName := g.argumentTypeName(expr, destType, false)
+		isPulumiType := strings.HasPrefix(argTypeName, "pulumi.")
+		if isPulumiType {
+			g.Fgenf(w, "%s(", argTypeName)
+			defer g.Fgenf(w, ")")
+		}
+
 		fmtMaker := make([]string, len(expr.Parts)+1)
 		fmtStr := strings.Join(fmtMaker, "%v")
 		g.Fgenf(w, "fmt.Sprintf(\"%s\"", fmtStr)
@@ -534,11 +526,11 @@ func (g *generator) GenTupleConsExpression(w io.Writer, expr *model.TupleConsExp
 
 // GenTupleConsExpression generates code for a TupleConsExpression.
 func (g *generator) genTupleConsExpression(w io.Writer, expr *model.TupleConsExpression, destType model.Type) {
-	isInput := isInputty(destType) || containsInputs(expr)
+	isInput := isInputty(destType)
 
 	var temps []interface{}
 	for i, item := range expr.Expressions {
-		item, itemTemps := g.lowerExpression(item, item.Type(), isInput)
+		item, itemTemps := g.lowerExpression(item, item.Type())
 		temps = append(temps, itemTemps...)
 		expr.Expressions[i] = item
 	}
@@ -573,7 +565,8 @@ var typeNameID = 0
 // argumentTypeName computes the go type for the given expression and model type.
 func (g *generator) argumentTypeName(expr model.Expression, destType model.Type, isInput bool) (result string) {
 	defer func(id int, t model.Type) {
-		log.Printf("%v: argumentTypeName(%v, %v) = %v", id, t, isInput, result)
+		schemaType, _ := hcl2.GetSchemaForType(destType)
+		log.Printf("%v: argumentTypeName(%v, %v, %v) = %v", id, t, isInput, schemaType, result)
 	}(typeNameID, destType)
 	typeNameID++
 
@@ -747,11 +740,13 @@ func (g *generator) argumentTypeName(expr model.Expression, destType model.Type,
 		return g.argumentTypeName(expr, destType.ElementType, isInput)
 	case *model.UnionType:
 		for _, ut := range destType.ElementTypes {
-			if _, isOpaqueType := ut.(*model.OpaqueType); isOpaqueType {
+			switch ut := ut.(type) {
+			case *model.OpaqueType:
 				return g.argumentTypeName(expr, ut, isInput)
-			}
-			if ct, isConstType := ut.(*model.ConstType); isConstType {
-				return g.argumentTypeName(expr, ct.Type, isInput)
+			case *model.ConstType:
+				return g.argumentTypeName(expr, ut.Type, isInput)
+			case *model.TupleType:
+				return g.argumentTypeName(expr, ut, isInput)
 			}
 		}
 		return "interface{}"
@@ -810,20 +805,17 @@ func (nameInfo) Format(name string) string {
 }
 
 // lowerExpression amends the expression with intrinsics for Go generation.
-func (g *generator) lowerExpression(expr model.Expression, typ model.Type, isInput bool) (
+func (g *generator) lowerExpression(expr model.Expression, typ model.Type) (
 	model.Expression, []interface{}) {
 	expr = hcl2.RewritePropertyReferences(expr)
 	expr, diags := hcl2.RewriteApplies(expr, nameInfo(0), false /*TODO*/)
 	expr = hcl2.RewriteConversions(expr, typ)
 	expr, tTemps, ternDiags := g.rewriteTernaries(expr, g.ternaryTempSpiller)
-	expr, jTemps, jsonDiags := g.rewriteToJSON(expr, g.jsonTempSpiller)
+	expr, jTemps, jsonDiags := g.rewriteToJSON(expr)
 	expr, rTemps, readDirDiags := g.rewriteReadDir(expr, g.readDirTempSpiller)
 	expr, sTemps, splatDiags := g.rewriteSplat(expr, g.splatSpiller)
 	expr, oTemps, optDiags := g.rewriteOptionals(expr, g.optionalSpiller)
 
-	if isInput {
-		expr = rewriteInputs(expr)
-	}
 	var temps []interface{}
 	for _, t := range tTemps {
 		temps = append(temps, t)
@@ -862,7 +854,6 @@ func (g *generator) genNYI(w io.Writer, reason string, vs ...interface{}) {
 func (g *generator) genApply(w io.Writer, expr *model.FunctionCallExpression) {
 	// Extract the list of outputs and the continuation expression from the `__apply` arguments.
 	applyArgs, then := hcl2.ParseApplyCall(expr)
-	then = stripInputs(then).(*model.AnonymousFunctionExpression)
 	isInput := false
 	retType := g.argumentTypeName(nil, then.Signature.ReturnType, isInput)
 	// TODO account for outputs in other namespaces like aws
@@ -882,7 +873,7 @@ func (g *generator) genApply(w io.Writer, expr *model.FunctionCallExpression) {
 		}
 		allApplyThen, typeConvDecls := g.rewriteThenForAllApply(then)
 		g.Fgenf(w, ").ApplyT(")
-		g.genAnonymousFunctionExpression(w, allApplyThen, typeConvDecls)
+		g.genAnonymousFunctionExpression(w, allApplyThen, typeConvDecls, true)
 		g.Fgenf(w, ")%s", typeAssertion)
 	}
 }

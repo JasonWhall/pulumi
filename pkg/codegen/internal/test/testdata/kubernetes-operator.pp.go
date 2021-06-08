@@ -31,12 +31,12 @@ func main() {
 					},
 					Spec: &corev1.PodSpecArgs{
 						ServiceAccountName: pulumi.String("pulumi-kubernetes-operator"),
-						ImagePullSecrets: corev1.LocalObjectReferenceArray{
+						ImagePullSecrets: corev1.LocalObjectReferenceArgsArray{
 							&corev1.LocalObjectReferenceArgs{
 								Name: pulumi.String("pulumi-kubernetes-operator"),
 							},
 						},
-						Containers: corev1.ContainerArray{
+						Containers: corev1.ContainerArgsArray{
 							&corev1.ContainerArgs{
 								Name:  pulumi.String("pulumi-kubernetes-operator"),
 								Image: pulumi.String("pulumi/pulumi-kubernetes-operator:v0.0.2"),
@@ -47,7 +47,7 @@ func main() {
 									pulumi.String("--zap-level=debug"),
 								},
 								ImagePullPolicy: pulumi.String("Always"),
-								Env: corev1.EnvVarArray{
+								Env: corev1.EnvVarArgsArray{
 									&corev1.EnvVarArgs{
 										Name: pulumi.String("WATCH_NAMESPACE"),
 										ValueFrom: &corev1.EnvVarSourceArgs{
@@ -85,7 +85,7 @@ func main() {
 				CreationTimestamp: nil,
 				Name:              pulumi.String("pulumi-kubernetes-operator"),
 			},
-			Rules: rbacv1.PolicyRuleArray{
+			Rules: rbacv1.PolicyRuleArgsArray{
 				&rbacv1.PolicyRuleArgs{
 					ApiGroups: pulumi.StringArray{
 						pulumi.String(""),
@@ -207,7 +207,7 @@ func main() {
 			Metadata: &metav1.ObjectMetaArgs{
 				Name: pulumi.String("pulumi-kubernetes-operator"),
 			},
-			Subjects: rbacv1.SubjectArray{
+			Subjects: rbacv1.SubjectArgsArray{
 				&rbacv1.SubjectArgs{
 					Kind: pulumi.String("ServiceAccount"),
 					Name: pulumi.String("pulumi-kubernetes-operator"),

@@ -240,7 +240,17 @@ func isNilType(t schema.Type) bool {
 	return false
 }
 
-func (pkg *pkgContext) inputType(t schema.Type) string {
+func (pkg *pkgContext) inputType(t schema.Type) (result string) {
+	if pkg.pkg.Name == "main" {
+		defer func() {
+			if result == "pulumi.Input" {
+				result = "pulumi.Any"
+			} else {
+				result = strings.TrimSuffix(result, "Input")
+			}
+		}()
+	}
+
 	switch t := t.(type) {
 	case *schema.OptionalType:
 		return pkg.typeString(t)
@@ -310,11 +320,10 @@ func (pkg *pkgContext) typeString(t schema.Type) string {
 			if _, isEnum := input.ElementType.(*schema.EnumType); isEnum {
 				return "*" + elem
 			}
-			base := strings.TrimSuffix(elem, "Input")
 			if pkg.pkg.Name == "main" {
-				return base
+				return elem + "Ptr"
 			}
-			return base + "PtrInput"
+			return strings.TrimSuffix(elem, "Input") + "PtrInput"
 		}
 
 		elementType := pkg.typeString(t.ElementType)
@@ -323,11 +332,7 @@ func (pkg *pkgContext) typeString(t schema.Type) string {
 		}
 		return "*" + elementType
 	case *schema.InputType:
-		typ := pkg.inputType(t.ElementType)
-		if pkg.pkg.Name == "main" {
-			return strings.TrimSuffix(typ, "Input")
-		}
-		return typ
+		return pkg.inputType(t.ElementType)
 	case *schema.EnumType:
 		return pkg.typeString(t.ElementType)
 	case *schema.ArrayType:
@@ -2101,6 +2106,7 @@ func generatePackageContextMap(tool string, pkg *schema.Package, goInfo GoPackag
 		pkg.functions = append(pkg.functions, f)
 
 		name := tokenToName(f.Token)
+		originalName := name
 		if pkg.names.Has(name) {
 			switch {
 			case strings.HasPrefix(name, "New"):
@@ -2114,9 +2120,15 @@ func generatePackageContextMap(tool string, pkg *schema.Package, goInfo GoPackag
 
 		if f.Inputs != nil {
 			pkg.names.Add(name + "Args")
+			if originalName != name {
+				pkg.renamed[originalName+"Args"] = name + "Args"
+			}
 		}
 		if f.Outputs != nil {
 			pkg.names.Add(name + "Result")
+			if originalName != name {
+				pkg.renamed[originalName+"Result"] = name + "Result"
+			}
 		}
 	}
 
