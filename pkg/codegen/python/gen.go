@@ -984,7 +984,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 	// Helper for generating an init method with inputs as function arguments.
 	emitInitMethodSignature := func(methodName string) {
 		fmt.Fprintf(w, "    def %s(__self__,\n", methodName)
-		fmt.Fprintf(w, "                 resource_name: str,\n")
+		fmt.Fprintf(w, "                 resource_name_: str,\n")
 		fmt.Fprintf(w, "                 opts: Optional[pulumi.ResourceOptions] = None")
 
 		// If there's an argument type, emit it.
@@ -1006,7 +1006,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 	// Emit an __init__ overload that accepts the resource's inputs from the args class.
 	fmt.Fprintf(w, "    @overload\n")
 	fmt.Fprintf(w, "    def __init__(__self__,\n")
-	fmt.Fprintf(w, "                 resource_name: str,\n")
+	fmt.Fprintf(w, "                 resource_name_: str,\n")
 	if allOptionalInputs {
 		fmt.Fprintf(w, "                 args: Optional[%sArgs] = None,\n", name)
 	} else {
@@ -1018,12 +1018,12 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 
 	// Emit the actual implementation of __init__, which does the appropriate thing based on which
 	// overload was called.
-	fmt.Fprintf(w, "    def __init__(__self__, resource_name: str, *args, **kwargs):\n")
+	fmt.Fprintf(w, "    def __init__(__self__, resource_name_: str, *args, **kwargs):\n")
 	fmt.Fprintf(w, "        resource_args, opts = _utilities.get_resource_args_opts(%sArgs, pulumi.ResourceOptions, *args, **kwargs)\n", name)
 	fmt.Fprintf(w, "        if resource_args is not None:\n")
-	fmt.Fprintf(w, "            __self__._internal_init(resource_name, opts, **resource_args.__dict__)\n")
+	fmt.Fprintf(w, "            __self__._internal_init(resource_name_, opts, **resource_args.__dict__)\n")
 	fmt.Fprintf(w, "        else:\n")
-	fmt.Fprintf(w, "            __self__._internal_init(resource_name, *args, **kwargs)\n")
+	fmt.Fprintf(w, "            __self__._internal_init(resource_name_, *args, **kwargs)\n")
 	fmt.Fprintf(w, "\n")
 
 	// Emit the _internal_init helper method which provides the bulk of the __init__ implementation.
@@ -1149,7 +1149,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 	}
 	fmt.Fprintf(w, "        super(%s, __self__).__init__(\n", name)
 	fmt.Fprintf(w, "            '%s',\n", tok)
-	fmt.Fprintf(w, "            resource_name,\n")
+	fmt.Fprintf(w, "            resource_name_,\n")
 	fmt.Fprintf(w, "            __props__,\n")
 	if res.IsComponent {
 		fmt.Fprintf(w, "            opts,\n")
@@ -1161,7 +1161,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 
 	if !res.IsProvider && !res.IsComponent {
 		fmt.Fprintf(w, "    @staticmethod\n")
-		fmt.Fprintf(w, "    def get(resource_name: str,\n")
+		fmt.Fprintf(w, "    def get(resource_name_: str,\n")
 		fmt.Fprintf(w, "            id: pulumi.Input[str],\n")
 		fmt.Fprintf(w, "            opts: Optional[pulumi.ResourceOptions] = None")
 
@@ -1198,7 +1198,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 			}
 		}
 
-		fmt.Fprintf(w, "        return %s(resource_name, opts=opts, __props__=__props__)\n\n", name)
+		fmt.Fprintf(w, "        return %s(resource_name_, opts=opts, __props__=__props__)\n\n", name)
 	}
 
 	// Write out Python property getters for each of the resource's properties.
@@ -1763,7 +1763,7 @@ func (mod *modContext) genInitDocstring(w io.Writer, res *schema.Resource, name 
 	}
 
 	// All resources have a resource_name parameter and opts parameter.
-	fmt.Fprintln(b, ":param str resource_name: The name of the resource.")
+	fmt.Fprintln(b, ":param str resource_name_: The name of the resource.")
 	if argOverload {
 		fmt.Fprintf(b, ":param %sArgs args: The arguments to use to populate this resource's properties.\n", name)
 	}
@@ -1786,7 +1786,7 @@ func (mod *modContext) genGetDocstring(w io.Writer, res *schema.Resource) {
 		"properties used to qualify the lookup.\n", tokenToName(res.Token))
 	fmt.Fprintln(b, "")
 
-	fmt.Fprintln(b, ":param str resource_name: The unique name of the resulting resource.")
+	fmt.Fprintln(b, ":param str resource_name_: The unique name of the resulting resource.")
 	fmt.Fprintln(b, ":param pulumi.Input[str] id: The unique provider ID of the resource to lookup.")
 	fmt.Fprintln(b, ":param pulumi.ResourceOptions opts: Options for the resource.")
 	if res.StateInputs != nil {
@@ -1993,7 +1993,7 @@ func pyClassName(name string) string {
 func InitParamName(name string) string {
 	result := PyName(name)
 	switch result {
-	case "resource_name", "opts":
+	case "resource_name_", "opts":
 		return result + "_"
 	default:
 		return result

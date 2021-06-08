@@ -140,7 +140,7 @@ class ComponentArgs:
 class Component(pulumi.ComponentResource):
     @overload
     def __init__(__self__,
-                 resource_name: str,
+                 resource_name_: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
                  a: Optional[bool] = None,
                  b: Optional[bool] = None,
@@ -155,31 +155,31 @@ class Component(pulumi.ComponentResource):
                  __props__=None):
         """
         Create a Component resource with the given unique name, props, and options.
-        :param str resource_name: The name of the resource.
+        :param str resource_name_: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
         """
         ...
     @overload
     def __init__(__self__,
-                 resource_name: str,
+                 resource_name_: str,
                  args: ComponentArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
         Create a Component resource with the given unique name, props, and options.
-        :param str resource_name: The name of the resource.
+        :param str resource_name_: The name of the resource.
         :param ComponentArgs args: The arguments to use to populate this resource's properties.
         :param pulumi.ResourceOptions opts: Options for the resource.
         """
         ...
-    def __init__(__self__, resource_name: str, *args, **kwargs):
+    def __init__(__self__, resource_name_: str, *args, **kwargs):
         resource_args, opts = _utilities.get_resource_args_opts(ComponentArgs, pulumi.ResourceOptions, *args, **kwargs)
         if resource_args is not None:
-            __self__._internal_init(resource_name, opts, **resource_args.__dict__)
+            __self__._internal_init(resource_name_, opts, **resource_args.__dict__)
         else:
-            __self__._internal_init(resource_name, *args, **kwargs)
+            __self__._internal_init(resource_name_, *args, **kwargs)
 
     def _internal_init(__self__,
-                 resource_name: str,
+                 resource_name_: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
                  a: Optional[bool] = None,
                  b: Optional[bool] = None,
@@ -223,7 +223,7 @@ class Component(pulumi.ComponentResource):
             __props__.__dict__["foo"] = foo
         super(Component, __self__).__init__(
             'example::Component',
-            resource_name,
+            resource_name_,
             __props__,
             opts,
             remote=True)
