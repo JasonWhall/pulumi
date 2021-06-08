@@ -459,6 +459,8 @@ func (pkg *pkgContext) resolveObjectType(t *schema.ObjectType) string {
 
 func (pkg *pkgContext) outputType(t schema.Type) string {
 	switch t := t.(type) {
+	case *schema.InputType:
+		return pkg.outputType(t.ElementType)
 	case *schema.OptionalType:
 		elem := pkg.outputType(t.ElementType)
 		if isNilType(t.ElementType) {
@@ -1234,7 +1236,7 @@ func (pkg *pkgContext) genResource(w io.Writer, r *schema.Resource, generateReso
 	if len(secretProps) > 0 {
 		for _, p := range secretProps {
 			fmt.Fprintf(w, "\tif args.%s != nil {\n", Title(p.Name))
-			fmt.Fprintf(w, "\t\targs.%[1]s = pulumi.ToSecret(args.%[1]s).(%[2]s)\n", Title(p.Name), pkg.outputType(p.Type, false))
+			fmt.Fprintf(w, "\t\targs.%[1]s = pulumi.ToSecret(args.%[1]s).(%[2]s)\n", Title(p.Name), pkg.outputType(p.Type))
 			fmt.Fprintf(w, "\t}\n")
 		}
 		fmt.Fprintf(w, "\tsecrets := pulumi.AdditionalSecretOutputs([]string{\n")

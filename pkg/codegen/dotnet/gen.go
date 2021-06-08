@@ -106,16 +106,18 @@ func isImmutableArrayType(t schema.Type, wrapInput bool) bool {
 }
 
 func isValueType(t schema.Type) bool {
-	t = codegen.UnwrapType(t)
-
-	if _, ok := t.(*schema.EnumType); ok {
-		return true
-	}
-	switch t {
-	case schema.BoolType, schema.IntType, schema.NumberType:
+	switch t := t.(type) {
+	case *schema.OptionalType:
+		return isValueType(t.ElementType)
+	case *schema.EnumType:
 		return true
 	default:
-		return false
+		switch t {
+		case schema.BoolType, schema.IntType, schema.NumberType:
+			return true
+		default:
+			return false
+		}
 	}
 }
 
@@ -228,6 +230,14 @@ func (mod *modContext) typeName(t *schema.ObjectType, state, input, args bool) s
 		return name + "Result"
 	}
 	return name
+}
+
+func isInputType(t schema.Type) bool {
+	if optional, ok := t.(*schema.OptionalType); ok {
+		t = optional.ElementType
+	}
+	_, isInputType := t.(*schema.InputType)
+	return isInputType
 }
 
 func ignoreOptional(t *schema.OptionalType, requireInitializers bool) bool {
@@ -474,8 +484,8 @@ func (pt *plainType) genInputProperty(w io.Writer, prop *schema.Property, indent
 	// complex types like lists and maps need a backing field. Secret properties also require a backing field.
 	if needsBackingField {
 		backingFieldName := "_" + prop.Name
-		requireInitializers := !pt.args
-		backingFieldType := pt.mod.typeString(prop.Type, pt.propertyTypeQualifier, true, pt.state, requireInitializers)
+		requireInitializers := !pt.args || !isInputType(prop.Type)
+		backingFieldType := pt.mod.typeString(codegen.RequiredType(prop), pt.propertyTypeQualifier, true, pt.state, requireInitializers)
 
 		fmt.Fprintf(w, "%s[Input(\"%s\"%s)]\n", indent, wireName, attributeArgs)
 		fmt.Fprintf(w, "%sprivate %s? %s;\n", indent, backingFieldType, backingFieldName)
@@ -486,7 +496,7 @@ func (pt *plainType) genInputProperty(w io.Writer, prop *schema.Property, indent
 		}
 		printObsoleteAttribute(w, prop.DeprecationMessage, indent)
 
-		switch prop.Type.(type) {
+		switch codegen.UnwrapType(prop.Type).(type) {
 		case *schema.ArrayType, *schema.MapType:
 			// Note that we use the backing field type--which is just the property type without any nullable annotation--to
 			// ensure that the user does not see warnings when initializing these properties using object or collection
@@ -523,7 +533,7 @@ func (pt *plainType) genInputProperty(w io.Writer, prop *schema.Property, indent
 		fmt.Fprintf(w, "%s}\n", indent)
 	} else {
 		initializer := ""
-		if prop.IsRequired() && (!isValueType(prop.Type) || pt.args) {
+		if prop.IsRequired() && !isValueType(prop.Type) {
 			initializer = " = null!;"
 		}
 

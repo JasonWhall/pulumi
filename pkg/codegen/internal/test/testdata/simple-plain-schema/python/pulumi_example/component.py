@@ -102,11 +102,11 @@ class ComponentArgs:
 
     @property
     @pulumi.getter(name="bazMap")
-    def baz_map(self) -> Optional[Mapping[str, 'Foo']]:
+    def baz_map(self) -> Optional[Mapping[str, pulumi.Input['FooArgs']]]:
         return pulumi.get(self, "baz_map")
 
     @baz_map.setter
-    def baz_map(self, value: Optional[Mapping[str, 'Foo']]):
+    def baz_map(self, value: Optional[Mapping[str, pulumi.Input['FooArgs']]]):
         pulumi.set(self, "baz_map", value)
 
     @property

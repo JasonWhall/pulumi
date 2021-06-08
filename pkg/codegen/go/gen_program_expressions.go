@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"math/big"
 	"strings"
 
@@ -564,10 +563,10 @@ var typeNameID = 0
 
 // argumentTypeName computes the go type for the given expression and model type.
 func (g *generator) argumentTypeName(expr model.Expression, destType model.Type, isInput bool) (result string) {
-	defer func(id int, t model.Type) {
-		schemaType, _ := hcl2.GetSchemaForType(destType)
-		log.Printf("%v: argumentTypeName(%v, %v, %v) = %v", id, t, isInput, schemaType, result)
-	}(typeNameID, destType)
+	//	defer func(id int, t model.Type) {
+	//		schemaType, _ := hcl2.GetSchemaForType(destType)
+	//		log.Printf("%v: argumentTypeName(%v, %v, %v) = %v", id, t, isInput, schemaType, result)
+	//	}(typeNameID, destType)
 	typeNameID++
 
 	if cns, ok := destType.(*model.ConstType); ok {

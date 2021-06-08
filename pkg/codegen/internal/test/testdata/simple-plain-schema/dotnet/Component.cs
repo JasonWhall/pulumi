@@ -85,10 +85,10 @@ namespace Pulumi.Example
         }
 
         [Input("bazMap")]
-        private Dictionary<string, Inputs.FooArgs>? _bazMap;
-        public Dictionary<string, Inputs.FooArgs> BazMap
+        private Dictionary<string, Input<Inputs.FooArgs>>? _bazMap;
+        public Dictionary<string, Input<Inputs.FooArgs>> BazMap
         {
-            get => _bazMap ?? (_bazMap = new Dictionary<string, Inputs.FooArgs>());
+            get => _bazMap ?? (_bazMap = new Dictionary<string, Input<Inputs.FooArgs>>());
             set => _bazMap = value;
         }
 
