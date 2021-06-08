@@ -310,7 +310,11 @@ func (pkg *pkgContext) typeString(t schema.Type) string {
 			if _, isEnum := input.ElementType.(*schema.EnumType); isEnum {
 				return "*" + elem
 			}
-			return strings.TrimSuffix(elem, "Input") + "PtrInput"
+			base := strings.TrimSuffix(elem, "Input")
+			if pkg.pkg.Name == "main" {
+				return base
+			}
+			return base + "PtrInput"
 		}
 
 		elementType := pkg.typeString(t.ElementType)
@@ -319,7 +323,11 @@ func (pkg *pkgContext) typeString(t schema.Type) string {
 		}
 		return "*" + elementType
 	case *schema.InputType:
-		return pkg.inputType(t.ElementType)
+		typ := pkg.inputType(t.ElementType)
+		if pkg.pkg.Name == "main" {
+			return strings.TrimSuffix(typ, "Input")
+		}
+		return typ
 	case *schema.EnumType:
 		return pkg.typeString(t.ElementType)
 	case *schema.ArrayType:

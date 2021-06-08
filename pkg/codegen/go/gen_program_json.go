@@ -61,7 +61,7 @@ func (g *generator) rewriteToJSON(
 	spiller *jsonSpiller,
 ) (model.Expression, []*jsonTemp, hcl.Diagnostics) {
 	spiller.temps = nil
-	x, diags := model.VisitExpression(x, spiller.spillExpression, nil)
+	x, diags := model.VisitExpression(x, nil, spiller.spillExpression)
 
 	return x, spiller.temps, diags
 

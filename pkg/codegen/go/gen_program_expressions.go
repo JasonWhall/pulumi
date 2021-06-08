@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
-	"reflect"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/hcl2"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/hcl2/model"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
@@ -569,8 +568,15 @@ func (g *generator) GenUnaryOpExpression(w io.Writer, expr *model.UnaryOpExpress
 	g.Fgenf(w, "%[2]v%.[1]*[3]v", precedence, opstr, expr.Operand)
 }
 
+var typeNameID = 0
+
 // argumentTypeName computes the go type for the given expression and model type.
-func (g *generator) argumentTypeName(expr model.Expression, destType model.Type, isInput bool) string {
+func (g *generator) argumentTypeName(expr model.Expression, destType model.Type, isInput bool) (result string) {
+	defer func(id int, t model.Type) {
+		log.Printf("%v: argumentTypeName(%v, %v) = %v", id, t, isInput, result)
+	}(typeNameID, destType)
+	typeNameID++
+
 	if cns, ok := destType.(*model.ConstType); ok {
 		destType = cns.Type
 	}
@@ -580,63 +586,67 @@ func (g *generator) argumentTypeName(expr model.Expression, destType model.Type,
 		return ""
 	}
 
-	var tokenRange hcl.Range
-	if expr != nil {
-		node := expr.SyntaxNode()
-		if node != nil && !reflect.ValueOf(node).IsNil() {
-			tokenRange = expr.SyntaxNode().Range()
-		}
-	}
-	if schemaType, ok := hcl2.GetSchemaForType(destType.(model.Type)); ok {
-		schemaType = codegen.UnwrapType(schemaType)
+	//	var tokenRange hcl.Range
+	//	if expr != nil {
+	//		node := expr.SyntaxNode()
+	//		if node != nil && !reflect.ValueOf(node).IsNil() {
+	//			tokenRange = expr.SyntaxNode().Range()
+	//		}
+	//	}
 
-		switch schemaType := schemaType.(type) {
-		case *schema.ArrayType:
-			token := schemaType.ElementType.(*schema.ObjectType).Token
-			pkg, module, member, diags := hcl2.DecomposeToken(token, tokenRange)
-			// namespaceless invokes
-			if module == "" || strings.HasPrefix(module, "/") || strings.HasPrefix(module, "index/") {
-				module = pkg
-			}
-			importPrefix := g.getModOrAlias(pkg, module)
-			importPrefix = strings.Split(importPrefix, "/")[0]
-			contract.Assert(len(diags) == 0)
-			fmtString := "[]%s.%s"
-			if isInput {
-				member = Title(member)
-				if strings.HasPrefix(member, "Get") {
-					if g.useLookupInvokeForm(token) {
-						member = strings.Replace(member, "Get", "Lookup", 1)
-					}
-					return fmt.Sprintf("[]%s.%s", importPrefix, member)
-				}
-				fmtString = "%s.%sArray"
-			}
-			return fmt.Sprintf(fmtString, importPrefix, member)
-		case *schema.ObjectType:
-			token := schemaType.Token
-			pkg, module, member, diags := hcl2.DecomposeToken(token, tokenRange)
-			// namespaceless invokes
-			if module == "" || strings.HasPrefix(module, "/") || strings.HasPrefix(module, "index/") {
-				module = pkg
-			}
-			importPrefix := g.getModOrAlias(pkg, module)
-			importPrefix = strings.Split(importPrefix, "/")[0]
-			contract.Assert(len(diags) == 0)
-			member = Title(member)
-			if strings.HasPrefix(member, "Get") {
-				if g.useLookupInvokeForm(token) {
-					member = strings.Replace(member, "Get", "Lookup", 1)
-				}
-				return fmt.Sprintf("%s.%s", importPrefix, member)
-			}
-			fmtString := "%s.%s"
-			if isInput {
-				fmtString = "%s.%sArgs"
-			}
-			return fmt.Sprintf(fmtString, importPrefix, member)
-		}
+	if schemaType, ok := hcl2.GetSchemaForType(destType); ok {
+		pkg := &pkgContext{pkg: &schema.Package{Name: "main"}}
+		return pkg.typeString(schemaType)
 	}
+
+	//	if _, isInput := schemaType.(*schema.InputType); ok && !isInput {
+	//		switch schemaType := schemaType.(type) {
+	//		case *schema.ArrayType:
+	//			token := codegen.UnwrapType(schemaType.ElementType).(*schema.ObjectType).Token
+	//			pkg, module, member, diags := hcl2.DecomposeToken(token, tokenRange)
+	//			// namespaceless invokes
+	//			if module == "" || strings.HasPrefix(module, "/") || strings.HasPrefix(module, "index/") {
+	//				module = pkg
+	//			}
+	//			importPrefix := g.getModOrAlias(pkg, module)
+	//			importPrefix = strings.Split(importPrefix, "/")[0]
+	//			contract.Assert(len(diags) == 0)
+	//			fmtString := "[]%s.%s"
+	//			if isInput {
+	//				member = Title(member)
+	//				if strings.HasPrefix(member, "Get") {
+	//					if g.useLookupInvokeForm(token) {
+	//						member = strings.Replace(member, "Get", "Lookup", 1)
+	//					}
+	//					return fmt.Sprintf("[]%s.%s", importPrefix, member)
+	//				}
+	//				fmtString = "%s.%sArray"
+	//			}
+	//			return fmt.Sprintf(fmtString, importPrefix, member)
+	//		case *schema.ObjectType:
+	//			token := schemaType.Token
+	//			pkg, module, member, diags := hcl2.DecomposeToken(token, tokenRange)
+	//			// namespaceless invokes
+	//			if module == "" || strings.HasPrefix(module, "/") || strings.HasPrefix(module, "index/") {
+	//				module = pkg
+	//			}
+	//			importPrefix := g.getModOrAlias(pkg, module)
+	//			importPrefix = strings.Split(importPrefix, "/")[0]
+	//			contract.Assert(len(diags) == 0)
+	//			member = Title(member)
+	//			if strings.HasPrefix(member, "Get") {
+	//				if g.useLookupInvokeForm(token) {
+	//					member = strings.Replace(member, "Get", "Lookup", 1)
+	//				}
+	//				return fmt.Sprintf("%s.%s", importPrefix, member)
+	//			}
+	//			fmtString := "%s.%s"
+	//			if isInput {
+	//				fmtString = "%s.%sArgs"
+	//			}
+	//			return fmt.Sprintf(fmtString, importPrefix, member)
+	//		}
+	//	}
 
 	switch destType := destType.(type) {
 	case *model.OpaqueType:
