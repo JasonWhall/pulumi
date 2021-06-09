@@ -95,7 +95,8 @@ func (t *OpaqueType) AssignableFrom(src Type) bool {
 	})
 }
 
-func (t *OpaqueType) conversionFromImpl(src Type, unifying, checkUnsafe bool, seen map[Type]struct{}) (ConversionKind, hcl.Diagnostics) {
+func (t *OpaqueType) conversionFromImpl(
+	src Type, unifying, checkUnsafe bool, seen map[Type]struct{}) (ConversionKind, hcl.Diagnostics) {
 	return conversionFrom(t, src, unifying, seen, func() (ConversionKind, hcl.Diagnostics) {
 		if constType, ok := src.(*ConstType); ok {
 			return t.conversionFrom(constType.Type, unifying, seen)

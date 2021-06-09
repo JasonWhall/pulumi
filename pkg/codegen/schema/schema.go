@@ -1219,7 +1219,8 @@ func (t *types) newArrayType(elementType Type) Type {
 	return typ
 }
 
-func (t *types) newUnionType(elements []Type, defaultType Type, discriminator string, mapping map[string]string) *UnionType {
+func (t *types) newUnionType(
+	elements []Type, defaultType Type, discriminator string, mapping map[string]string) *UnionType {
 	union := &UnionType{
 		ElementTypes:  elements,
 		DefaultType:   defaultType,

@@ -102,8 +102,8 @@ func (t *MapType) conversionFrom(src Type, unifying bool, seen map[Type]struct{}
 			conversionKind := SafeConversion
 			var diags hcl.Diagnostics
 			for _, src := range src.Properties {
-				if ck, why := t.ElementType.conversionFrom(src, unifying, seen); ck < conversionKind {
-					conversionKind, why = ck, why
+				if ck, _ := t.ElementType.conversionFrom(src, unifying, seen); ck < conversionKind {
+					conversionKind = ck
 					if conversionKind == NoConversion {
 						break
 					}

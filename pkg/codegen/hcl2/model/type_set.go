@@ -82,12 +82,14 @@ func (t *SetType) conversionFrom(src Type, unifying bool, seen map[Type]struct{}
 		case *SetType:
 			return t.ElementType.conversionFrom(src.ElementType, unifying, seen)
 		case *ListType:
-			if conversionKind, why := t.ElementType.conversionFrom(src.ElementType, unifying, seen); conversionKind == NoConversion {
+			if conversionKind, why := t.ElementType.conversionFrom(src.ElementType, unifying, seen); conversionKind ==
+				NoConversion {
 				return NoConversion, why
 			}
 			return UnsafeConversion, nil
 		case *TupleType:
-			if conversionKind, why := NewListType(t.ElementType).conversionFrom(src, unifying, seen); conversionKind == NoConversion {
+			if conversionKind, why := NewListType(t.ElementType).conversionFrom(src, unifying, seen); conversionKind ==
+				NoConversion {
 				return NoConversion, why
 			}
 			return UnsafeConversion, nil

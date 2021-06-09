@@ -146,6 +146,7 @@ func (g *generator) GenConditionalExpression(w io.Writer, expr *model.Conditiona
 func (g *generator) GenForExpression(w io.Writer, expr *model.ForExpression) { /*TODO*/ }
 
 func (g *generator) GenFunctionCallExpression(w io.Writer, expr *model.FunctionCallExpression) {
+	//nolint:goconst
 	switch expr.Name {
 	case hcl2.IntrinsicConvert:
 		switch arg := expr.Args[0].(type) {
@@ -323,13 +324,14 @@ func (g *generator) genObjectConsExpression(
 		}
 	}
 
-	if strings.HasSuffix(typeName, "Args") {
-		isInput = true
-	}
-	// invokes are not inputty
-	if strings.Contains(typeName, ".Lookup") || strings.Contains(typeName, ".Get") {
-		isInput = false
-	}
+	// TODO: @pgavlin --- ineffectual assignment, was there some work in flight here?
+	// if strings.HasSuffix(typeName, "Args") {
+	// 	isInput = true
+	// }
+	// // invokes are not inputty
+	// if strings.Contains(typeName, ".Lookup") || strings.Contains(typeName, ".Get") {
+	// 	isInput = false
+	// }
 	isMap := strings.HasPrefix(typeName, "map[")
 
 	// TODO: retrieve schema and propagate optionals to emit bool ptr, etc.
@@ -371,7 +373,8 @@ func (g *generator) genObjectConsExpression(
 	g.Fgenf(w, "}")
 }
 
-func (g *generator) genRelativeTraversalExpression(w io.Writer, expr *model.RelativeTraversalExpression, isInput bool) {
+func (g *generator) genRelativeTraversalExpression(
+	w io.Writer, expr *model.RelativeTraversalExpression, isInput bool) {
 
 	if _, ok := expr.Parts[0].(*model.PromiseType); ok {
 		isInput = false
@@ -405,7 +408,8 @@ func (g *generator) GenScopeTraversalExpression(w io.Writer, expr *model.ScopeTr
 	g.genScopeTraversalExpression(w, expr, expr.Type())
 }
 
-func (g *generator) genScopeTraversalExpression(w io.Writer, expr *model.ScopeTraversalExpression, destType model.Type) {
+func (g *generator) genScopeTraversalExpression(
+	w io.Writer, expr *model.ScopeTraversalExpression, destType model.Type) {
 	rootName := expr.RootName
 
 	if _, ok := expr.Parts[0].(*model.SplatVariable); ok {
