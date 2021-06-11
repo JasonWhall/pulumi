@@ -332,6 +332,13 @@ class ResourceOptions:
     If provided, ignore changes to any of the specified properties.
     """
 
+    replace_on_changes: Optional[List[str]]
+    """
+    Changes to any of these properties will force a replacement.  If this list includes `"*"`, changes
+    to any properties will force a replacement.  Initialization errors from previous deployments will
+    require replacement instead of update only if `"*"` is passed.
+    """
+
     version: Optional[str]
     """
     An optional version. If provided, the engine loads a provider with exactly the requested version

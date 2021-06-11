@@ -948,8 +948,7 @@ func objectDiffToDetailedDiff(prefix string, d *resource.ObjectDiff) map[string]
 		var nestedPrefix string
 		if prefix == "" {
 			nestedPrefix = string(k)
-		}
-		if prefix != "" {
+		} else {
 			nestedPrefix = fmt.Sprintf("%s.%s", prefix, string(k))
 		}
 		for kk, pd := range valueDiffToDetailedDiff(nestedPrefix, vd) {
