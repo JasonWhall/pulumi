@@ -1,4 +1,4 @@
-// Copyright 2016-2018, Pulumi Corporation.
+// Copyright 2016-2021, Pulumi Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1181,19 +1181,19 @@ func (sg *stepGenerator) getProviderResource(urn resource.URN, provider string) 
 }
 
 type replaceOnChangeSet struct {
-	m   map[resource.PropertyKey]bool
+	m   map[resource.PropertyKey]struct{}
 	all bool
 }
 
 func newReplaceOnChangeSet(keys []resource.PropertyKey) *replaceOnChangeSet {
-	m := map[resource.PropertyKey]bool{}
+	m := map[resource.PropertyKey]struct{}{}
 	all := false
 	for _, key := range keys {
 		if key == "*" {
 			all = true
 			continue
 		}
-		m[key] = true
+		m[key] = struct{}{}
 	}
 	return &replaceOnChangeSet{
 		m:   m,
