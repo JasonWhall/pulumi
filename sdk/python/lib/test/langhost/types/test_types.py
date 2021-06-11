@@ -24,7 +24,7 @@ class TestTypes(LanghostTest):
 
     def register_resource(self, ctx, dry_run, ty, name, _resource,
                           _dependencies, _parent, _custom, _protect,
-                          _provider, _property_deps, _delete_before_replace, _ignore_changes, version):
+                          _provider, _property_deps, _delete_before_replace, _ignore_changes, version, _replace_on_changes):
         if name in ["testres", "testres2", "testres3", "testres4"]:
             self.assertIn("additional", _resource)
             self.assertEqual({

@@ -15,20 +15,20 @@ from os import path
 from ..util import LanghostTest
 
 
-class ProtectTest(LanghostTest):
+class DeleteBeforeReplaceTest(LanghostTest):
     """
-    Tests that protected resources correctly pass the "protect" boolean to the engine.
+    Tests that DBRed resources correctly pass the "DBR" boolean to the engine.
     """
-    def test_protect(self):
+    def test_delete_before_replace(self):
         self.run_test(
-            program=path.join(self.base_path(), "protect"),
+            program=path.join(self.base_path(), "delete_before_replace"),
             expected_resource_count=1)
 
     def register_resource(self, _ctx, _dry_run, ty, name, _resource,
-                          _dependencies, _parent, _custom, protect, _provider, _property_deps, _delete_before_replace,
+                          _dependencies, _parent, _custom, _protect, _provider, _property_deps, delete_before_replace,
                           _ignore_changes, _version, _replace_on_changes):
         self.assertEqual("foo", name)
-        self.assertTrue(protect)
+        self.assertTrue(delete_before_replace)
         return {
             "urn": self.make_urn(ty, name)
         }

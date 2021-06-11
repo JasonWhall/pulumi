@@ -98,6 +98,7 @@ class LanghostMockResourceMonitor(proto.ResourceMonitorServicer):
         ignore_changes = sorted(list(request.ignoreChanges))
         version = request.version
         import_ = request.importId
+        replace_on_changes = sorted(list(request.replaceOnChanges))
 
         property_dependencies = {}
         for key, value in request.propertyDependencies.items():
@@ -106,7 +107,7 @@ class LanghostMockResourceMonitor(proto.ResourceMonitorServicer):
         outs = {}
         if type_ != "pulumi:pulumi:Stack":
             rrsig = signature(self.langhost_test.register_resource)
-            args = [context, self.dryrun, type_, name, props, deps, parent, custom, protect, provider, property_dependencies, delete_before_replace, ignore_changes, version, import_]
+            args = [context, self.dryrun, type_, name, props, deps, parent, custom, protect, provider, property_dependencies, delete_before_replace, ignore_changes, version, import_, replace_on_changes]
             outs = self.langhost_test.register_resource(*args[0:len(rrsig.parameters)])
             if outs.get("urn"):
                 urn = outs["urn"]

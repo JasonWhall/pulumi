@@ -23,7 +23,7 @@ class InheritanceTranslationTest(LanghostTest):
 
     def register_resource(self, ctx, dry_run, ty, name, _resource,
                           _dependencies, _parent, _custom, _protect, _provider, _property_deps, _delete_before_replace,
-                          _ignore_changes, _version):
+                          _ignore_changes, _version, _replace_on_changes):
         self.assertEqual("test:index:MyResource", ty)
         return {
             "urn": self.make_urn(ty, name),

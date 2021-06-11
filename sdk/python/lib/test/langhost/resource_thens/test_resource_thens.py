@@ -31,7 +31,7 @@ class ResourceThensTest(LanghostTest):
 
     def register_resource(self, _ctx, dry_run, ty, name, res, deps,
                           _parent, custom, _protect, _provider, _property_deps, _delete_before_replace,
-                          _ignore_changes, _version):
+                          _ignore_changes, _version, _replace_on_changes):
         if ty == "test:index:ResourceA":
             self.assertEqual(name, "resourceA")
             self.assertDictEqual(res, {"inprop": 777, "inprop_2": 42})

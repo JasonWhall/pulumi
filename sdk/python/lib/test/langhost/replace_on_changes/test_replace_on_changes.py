@@ -1,4 +1,4 @@
-# Copyright 2016-2018, Pulumi Corporation.
+# Copyright 2016-2021, Pulumi Corporation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,20 +15,23 @@ from os import path
 from ..util import LanghostTest
 
 
-class DeleteBeforeReplaceTest(LanghostTest):
+class TestReplaceOnChanges(LanghostTest):
     """
-    Tests that DBRed resources correctly pass the "DBR" boolean to the engine.
+    Tests that Pulumi resources can accept ignore_changes resource options.
     """
-    def test_protect(self):
+    def test_replace_on_changes(self):
         self.run_test(
-            program=path.join(self.base_path(), "delete_before_replace"),
+            program=path.join(self.base_path(), "replace_on_changes"),
             expected_resource_count=1)
 
-    def register_resource(self, _ctx, _dry_run, ty, name, _resource,
-                          _dependencies, _parent, _custom, _protect, _provider, _property_deps, delete_before_replace,
-                          _ignore_changes, _version):
-        self.assertEqual("foo", name)
-        self.assertTrue(delete_before_replace)
+    def register_resource(self, _ctx, _dry_run, ty, name, resource, _deps,
+                          _parent, _custom, _protect, _provider, _property_deps, _delete_before_replace,
+                          ignore_changes, _version, replace_on_changes):
+
+        self.assertListEqual(replace_on_changes, ["property_a", "property_b"])
+
         return {
-            "urn": self.make_urn(ty, name)
+            "urn": self.make_urn(ty, name),
+            "id": name,
+            "object": resource
         }

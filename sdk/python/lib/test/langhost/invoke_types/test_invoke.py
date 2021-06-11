@@ -45,7 +45,7 @@ class TestInvoke(LanghostTest):
 
     def register_resource(self, _ctx, _dry_run, ty, name, resource, _deps,
                           _parent, _custom, _protect, _provider, _property_deps, _delete_before_replace,
-                          _ignore_changes, _version):
+                          _ignore_changes, _version, _replace_on_changes):
         if name == "resourceA":
             self.assertEqual({
                 "first_value": "hellohello",

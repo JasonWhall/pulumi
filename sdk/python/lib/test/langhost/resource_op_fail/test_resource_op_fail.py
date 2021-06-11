@@ -23,5 +23,5 @@ class UnhandledExceptionTest(LanghostTest):
 
     def register_resource(self, _ctx, _dry_run, _ty, _name, _resource,
                           _dependencies, _parent, _custom, _protect, _provider, _property_deps, _delete_before_replace,
-                          _ignore_changes, _version):
+                          _ignore_changes, _version, _replace_on_changes):
         raise Exception("oh no")
