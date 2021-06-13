@@ -1,37 +1,25 @@
 ### Improvements
 
-- [dotnet/sdk] Add get value async to output utilities.
-  [#7170](https://github.com/pulumi/pulumi/pull/7170)
+- [dotnet/sdk] Support microsoft logging extensions with inline programs
+  [#7117](https://github.com/pulumi/pulumi/pull/7117)
 
-- [codegen] - Fix Go init.go codegen to be govet compliant.
+- [dotnet/sdk] Add create unknown to output utilities.
+  [#7173](https://github.com/pulumi/pulumi/pull/7173)
 
-- [codegen] - Encrypt input args for secret properties.
-  [#7128](https://github.com/pulumi/pulumi/pull/7128)
+- [dotnet] Fix Resharper code issues.
+  [#7178](https://github.com/pulumi/pulumi/pull/7178)
 
 - [core] Add support for new `replaceOnChanges` resource option.
   [#7226](https://github.com/pulumi/pulumi/pull/7226)
 
+- [codegen] - Include properties with an underlying type of string on Go provider instances.
+
+- [cli] - Provide a more helpful error instead of panicking when codegen fails during import.
+  [#7265](https://github.com/pulumi/pulumi/pull/7265)
+
 ### Bug Fixes
 
-- [CLI] Fix broken venv for Python projects started from templates
-  [#6624](https://github.com/pulumi/pulumi/pull/6623)
-  
-- [cli] - Send plugin install output to stderr, so that it doesn't
-  clutter up --json, automation API scenarios, and so on.
-  [#7115](https://github.com/pulumi/pulumi/pull/7115)
-  
-- [cli] Protect against panics when using the wrong resource type with `pulumi import`
-  [#7202](https://github.com/pulumi/pulumi/pull/7202)
+- [sdk/python] - Fix regression in behaviour for `Output.from_input({})`
 
-- [auto/nodejs] - Emit warning instead of breaking on parsing JSON events for automation API.
-  [#7162](https://github.com/pulumi/pulumi/pull/7162)
-
-- [sdk/python] Improve performance of `Output.from_input` and `Output.all` on nested objects.
-  [#7175](https://github.com/pulumi/pulumi/pull/7175)
-
-- [codegen/dotnet] Fix plain properties
-  [#7180](https://github.com/pulumi/pulumi/pull/7180)
-
-### Misc
-- Update version of go-cloud used by Pulumi to `0.23.0`.
-  [#7204](https://github.com/pulumi/pulumi/pull/7204)
+- [codegen/python] - Rename conflicting ResourceArgs classes
+  [#7171](https://github.com/pulumi/pulumi/pull/7171)
