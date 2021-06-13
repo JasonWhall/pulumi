@@ -334,7 +334,7 @@ class ResourceOptions:
 
     replace_on_changes: Optional[List[str]]
     """
-    Changes to any of these properties will force a replacement.  If this list includes `"*"`, changes
+    Changes to any of these property paths will force a replacement.  If this list includes `"*"`, changes
     to any properties will force a replacement.  Initialization errors from previous deployments will
     require replacement instead of update only if `"*"` is passed.
     """
@@ -397,6 +397,7 @@ class ResourceOptions:
                  providers: Optional[Union[Mapping[str, 'ProviderResource'], List['ProviderResource']]] = None,
                  delete_before_replace: Optional[bool] = None,
                  ignore_changes: Optional[List[str]] = None,
+                 replace_on_changes: Optional[List[str]] = None,
                  version: Optional[str] = None,
                  aliases: Optional[List['Input[Union[str, Alias]]']] = None,
                  additional_secret_outputs: Optional[List[str]] = None,
@@ -451,6 +452,7 @@ class ResourceOptions:
         self.providers = providers
         self.delete_before_replace = delete_before_replace
         self.ignore_changes = ignore_changes
+        self.replace_on_changes = replace_on_changes
         self.version = version
         self.aliases = aliases
         self.additional_secret_outputs = additional_secret_outputs
