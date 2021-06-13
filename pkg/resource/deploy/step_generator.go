@@ -527,12 +527,17 @@ func (sg *stepGenerator) generateStepsFromDiff(
 
 	// There are changes if the diff returned DiffSome or if there were initErrors previously that should
 	// force an update to occur even if no inputs changed.
-	needsUpdateOrReplace := diff.Changes == plugin.DiffSome || len(old.InitErrors) > 0
+	hasInitErrors := len(old.InitErrors) > 0
+	needsUpdateOrReplace := diff.Changes == plugin.DiffSome || hasInitErrors
 
 	// If there were changes check for a replacement vs. an in-place update.
 	if needsUpdateOrReplace {
-		replaceKeys := sg.calculateReplaceKeys(old, new, diff)
-		if len(replaceKeys) > 0 {
+		// Update the diff to apply any replaceOnChanges annotations and to include initErrors in the diff.
+		diff, err = sg.applyReplaceOnChanges(diff, new.ReplaceOnChangeKeys, hasInitErrors)
+		if err != nil {
+			return nil, result.FromError(err)
+		}
+		if diff.Replace() {
 			// If the goal state specified an ID, issue an error: the replacement will change the ID, and is
 			// therefore incompatible with the goal state.
 			if goal.ID != "" {
@@ -564,7 +569,7 @@ func (sg *stepGenerator) generateStepsFromDiff(
 
 			if logging.V(7) {
 				logging.V(7).Infof("Planner decided to replace '%v' (oldprops=%v inputs=%v replaceKeys=%v)",
-					urn, oldInputs, new.Inputs, replaceKeys)
+					urn, oldInputs, new.Inputs, diff.ReplaceKeys)
 			}
 
 			// We have two approaches to performing replacements:
@@ -1215,39 +1220,95 @@ func (s *replaceOnChangeSet) All() bool {
 	return s.all
 }
 
-// calculateReplaceKeys determines the keys that would force a replacement. If there are any, a replacement
-// operation will be scheduled for the resource, else an update operation will be scheduled. The following
-// may cause a key to force a replacement:
-// * The detailed diff reports the key requires replacement
-// * The detailed diff reports the key requires update, but the key is marked as replace-on-change (or "*")
-// * The diff includes the key as a replace key
-// * The diff includes the key as a changed key, but the key is marked as replace-on-change (or "*")
-// * The old state had initErrors, and replace-on-change is "*" (a synthetic property is used to track)
-func (sg *stepGenerator) calculateReplaceKeys(
-	old, new *resource.State,
-	diff plugin.DiffResult) map[resource.PropertyKey]bool {
+// initErrorSpecialKey is a special property key used to indicate that a diff is due to
+// intiialization errors existing in the old state instead of due to a specific proeprty
+// diff between old and new states.
+const initErrorSpecialKey = "#initerror"
 
-	replaceOnChangeSet := newReplaceOnChangeSet(new.ReplaceOnChangeKeys)
+// applyReplaceOnChanges adjusts a DiffResult returned from a provider to apply the ReplaceOnChange
+// settings in the desired state and initerrors from the previous state.
+func (sg *stepGenerator) applyReplaceOnChanges(diff plugin.DiffResult,
+	replaceOnChangeKeys []resource.PropertyKey, hasInitErrors bool) (plugin.DiffResult, error) {
 
-	replaceKeys := map[resource.PropertyKey]bool{}
-	for k, v := range diff.DetailedDiff {
-		p := resource.PropertyKey(k)
-		if v.Kind.IsReplace() || replaceOnChangeSet.Contains(p) {
-			replaceKeys[p] = true
+	var err error
+	diffPaths := map[string]resource.PropertyPath{}
+	for p := range diff.DetailedDiff {
+		diffPaths[p], err = resource.ParsePropertyPath(p)
+		if err != nil {
+			return diff, err
 		}
 	}
+
+	var replaceOnChangePaths []resource.PropertyPath
+	for _, p := range replaceOnChangeKeys {
+		path, err := resource.ParsePropertyPath(string(p)) // TODO: p should be a string
+		if err != nil {
+			return diff, err
+		}
+		replaceOnChangePaths = append(replaceOnChangePaths, path)
+	}
+
+	// Calculate the new DetailedDiff
+	modifiedDiff := map[string]plugin.PropertyDiff{}
+	for p, v := range diff.DetailedDiff {
+		diffPath, err := resource.ParsePropertyPath(p)
+		if err != nil {
+			return diff, err
+		}
+		for _, replaceOnChangePath := range replaceOnChangePaths {
+			if replaceOnChangePath.Contains(diffPath) {
+				v = v.ToReplace()
+			}
+			modifiedDiff[p] = v
+		}
+	}
+
+	// Calculate the new ReplaceKeys
+	modifiedReplaceKeysMap := map[resource.PropertyKey]struct{}{}
 	for _, k := range diff.ReplaceKeys {
-		replaceKeys[k] = true
+		modifiedReplaceKeysMap[k] = struct{}{}
 	}
 	for _, k := range diff.ChangedKeys {
-		if replaceOnChangeSet.Contains(k) {
-			replaceKeys[k] = true
+		for _, replaceOnChangePath := range replaceOnChangePaths {
+			keyPath, err := resource.ParsePropertyPath(string(k))
+			if err != nil {
+				continue
+			}
+			if replaceOnChangePath.Contains(keyPath) {
+				modifiedReplaceKeysMap[k] = struct{}{}
+			}
 		}
 	}
-	if len(old.InitErrors) > 0 && replaceOnChangeSet.All() {
-		replaceKeys[resource.PropertyKey("#initerror")] = true
+	var modifiedReplaceKeys []resource.PropertyKey
+	for k := range modifiedReplaceKeysMap {
+		modifiedReplaceKeys = append(modifiedReplaceKeys, k)
 	}
-	return replaceKeys
+
+	// Add init errors to modified diff results
+	if hasInitErrors {
+		for _, replaceOnChangePath := range replaceOnChangePaths {
+			initErrPath, err := resource.ParsePropertyPath(initErrorSpecialKey)
+			if err != nil {
+				continue
+			}
+			if replaceOnChangePath.Contains(initErrPath) {
+				modifiedReplaceKeys = append(modifiedReplaceKeys, initErrorSpecialKey)
+				modifiedDiff[initErrorSpecialKey] = plugin.PropertyDiff{
+					Kind:      plugin.DiffUpdateReplace,
+					InputDiff: false,
+				}
+			}
+		}
+	}
+
+	return plugin.DiffResult{
+		DetailedDiff:        modifiedDiff,
+		ReplaceKeys:         modifiedReplaceKeys,
+		ChangedKeys:         diff.ChangedKeys,
+		Changes:             diff.Changes,
+		DeleteBeforeReplace: diff.DeleteBeforeReplace,
+		StableKeys:          diff.StableKeys,
+	}, nil
 }
 
 type dependentReplace struct {
