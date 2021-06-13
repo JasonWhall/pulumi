@@ -8,6 +8,9 @@
 - [codegen] - Encrypt input args for secret properties.
   [#7128](https://github.com/pulumi/pulumi/pull/7128)
 
+- [core] Add support for new `replaceOnChanges` resource option.
+  [#7226](https://github.com/pulumi/pulumi/pull/7226)
+
 ### Bug Fixes
 
 - [CLI] Fix broken venv for Python projects started from templates
