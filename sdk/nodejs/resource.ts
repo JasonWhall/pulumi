@@ -492,7 +492,7 @@ export interface ResourceOptions {
      */
     ignoreChanges?: string[];
     /**
-     * Changes to any of these property paths will force a replacement.  If this list includes `"*"`, changes to any 
+     * Changes to any of these property paths will force a replacement.  If this list includes `"*"`, changes to any
      * properties will force a replacement.  Initialization errors from previous deployments will require replacement
      * instead of update only if `"*"` is passed.
      */

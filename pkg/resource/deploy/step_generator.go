@@ -1205,7 +1205,7 @@ func (sg *stepGenerator) applyReplaceOnChanges(diff plugin.DiffResult,
 
 	var replaceOnChangePaths []resource.PropertyPath
 	for _, p := range replaceOnChanges {
-		path, err := resource.ParsePropertyPath(string(p)) // TODO: p should be a string
+		path, err := resource.ParsePropertyPath(p)
 		if err != nil {
 			return diff, err
 		}
