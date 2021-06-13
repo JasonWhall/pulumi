@@ -1285,7 +1285,7 @@ proto.pulumirpc.RegisterResourceRequest.toObject = function(includeInstance, msg
     remote: jspb.Message.getBooleanFieldWithDefault(msg, 20, false),
     acceptresources: jspb.Message.getBooleanFieldWithDefault(msg, 21, false),
     providersMap: (f = msg.getProvidersMap()) ? f.toObject(includeInstance, undefined) : [],
-    replaceonchangekeysList: (f = jspb.Message.getRepeatedField(msg, 23)) == null ? undefined : f
+    replaceonchangesList: (f = jspb.Message.getRepeatedField(msg, 23)) == null ? undefined : f
   };
 
   if (includeInstance) {
@@ -1418,7 +1418,7 @@ proto.pulumirpc.RegisterResourceRequest.deserializeBinaryFromReader = function(m
       break;
     case 23:
       var value = /** @type {string} */ (reader.readString());
-      msg.addReplaceonchangekeys(value);
+      msg.addReplaceonchanges(value);
       break;
     default:
       reader.skipField();
@@ -1599,7 +1599,7 @@ proto.pulumirpc.RegisterResourceRequest.serializeBinaryToWriter = function(messa
   if (f && f.getLength() > 0) {
     f.serializeBinary(22, writer, jspb.BinaryWriter.prototype.writeString, jspb.BinaryWriter.prototype.writeString);
   }
-  f = message.getReplaceonchangekeysList();
+  f = message.getReplaceonchangesList();
   if (f.length > 0) {
     writer.writeRepeatedString(
       23,
@@ -2474,10 +2474,10 @@ proto.pulumirpc.RegisterResourceRequest.prototype.clearProvidersMap = function()
 
 
 /**
- * repeated string replaceOnChangeKeys = 23;
+ * repeated string replaceOnChanges = 23;
  * @return {!Array<string>}
  */
-proto.pulumirpc.RegisterResourceRequest.prototype.getReplaceonchangekeysList = function() {
+proto.pulumirpc.RegisterResourceRequest.prototype.getReplaceonchangesList = function() {
   return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 23));
 };
 
@@ -2486,7 +2486,7 @@ proto.pulumirpc.RegisterResourceRequest.prototype.getReplaceonchangekeysList = f
  * @param {!Array<string>} value
  * @return {!proto.pulumirpc.RegisterResourceRequest} returns this
  */
-proto.pulumirpc.RegisterResourceRequest.prototype.setReplaceonchangekeysList = function(value) {
+proto.pulumirpc.RegisterResourceRequest.prototype.setReplaceonchangesList = function(value) {
   return jspb.Message.setField(this, 23, value || []);
 };
 
@@ -2496,7 +2496,7 @@ proto.pulumirpc.RegisterResourceRequest.prototype.setReplaceonchangekeysList = f
  * @param {number=} opt_index
  * @return {!proto.pulumirpc.RegisterResourceRequest} returns this
  */
-proto.pulumirpc.RegisterResourceRequest.prototype.addReplaceonchangekeys = function(value, opt_index) {
+proto.pulumirpc.RegisterResourceRequest.prototype.addReplaceonchanges = function(value, opt_index) {
   return jspb.Message.addToRepeatedField(this, 23, value, opt_index);
 };
 
@@ -2505,8 +2505,8 @@ proto.pulumirpc.RegisterResourceRequest.prototype.addReplaceonchangekeys = funct
  * Clears the list making it empty but non-null.
  * @return {!proto.pulumirpc.RegisterResourceRequest} returns this
  */
-proto.pulumirpc.RegisterResourceRequest.prototype.clearReplaceonchangekeysList = function() {
-  return this.setReplaceonchangekeysList([]);
+proto.pulumirpc.RegisterResourceRequest.prototype.clearReplaceonchangesList = function() {
+  return this.setReplaceonchangesList([]);
 };
 
 

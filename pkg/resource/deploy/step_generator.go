@@ -107,7 +107,6 @@ func (sg *stepGenerator) GenerateReadSteps(event ReadResourceEvent) ([]Step, res
 		nil, /* aliases */
 		nil, /* customTimeouts */
 		"",  /* importID */
-		nil, /* replaceOnChangeKeys */
 	)
 	old, hasOld := sg.deployment.Olds()[urn]
 
@@ -249,7 +248,7 @@ func (sg *stepGenerator) generateSteps(event RegisterResourceEvent) ([]Step, res
 	// get serialized into the checkpoint file.
 	new := resource.NewState(goal.Type, urn, goal.Custom, false, "", inputs, nil, goal.Parent, goal.Protect, false,
 		goal.Dependencies, goal.InitErrors, goal.Provider, goal.PropertyDependencies, false,
-		goal.AdditionalSecretOutputs, goal.Aliases, &goal.CustomTimeouts, "", goal.ReplaceOnChangeKeys)
+		goal.AdditionalSecretOutputs, goal.Aliases, &goal.CustomTimeouts, "")
 
 	// Mark the URN/resource as having been seen. So we can run analyzers on all resources seen, as well as
 	// lookup providers for calculating replacement of resources that use the provider.
@@ -533,7 +532,7 @@ func (sg *stepGenerator) generateStepsFromDiff(
 	// If there were changes check for a replacement vs. an in-place update.
 	if needsUpdateOrReplace {
 		// Update the diff to apply any replaceOnChanges annotations and to include initErrors in the diff.
-		diff, err = sg.applyReplaceOnChanges(diff, new.ReplaceOnChangeKeys, hasInitErrors)
+		diff, err = sg.applyReplaceOnChanges(diff, goal.ReplaceOnChanges, hasInitErrors)
 		if err != nil {
 			return nil, result.FromError(err)
 		}
@@ -1185,41 +1184,6 @@ func (sg *stepGenerator) getProviderResource(urn resource.URN, provider string) 
 	return result
 }
 
-type replaceOnChangeSet struct {
-	m   map[resource.PropertyKey]struct{}
-	all bool
-}
-
-func newReplaceOnChangeSet(keys []resource.PropertyKey) *replaceOnChangeSet {
-	m := map[resource.PropertyKey]struct{}{}
-	all := false
-	for _, key := range keys {
-		if key == "*" {
-			all = true
-			continue
-		}
-		m[key] = struct{}{}
-	}
-	return &replaceOnChangeSet{
-		m:   m,
-		all: all,
-	}
-}
-
-func (s *replaceOnChangeSet) Contains(key resource.PropertyKey) bool {
-	if s.all {
-		return true
-	}
-	if _, ok := s.m[key]; ok {
-		return true
-	}
-	return false
-}
-
-func (s *replaceOnChangeSet) All() bool {
-	return s.all
-}
-
 // initErrorSpecialKey is a special property key used to indicate that a diff is due to
 // intiialization errors existing in the old state instead of due to a specific proeprty
 // diff between old and new states.
@@ -1228,7 +1192,7 @@ const initErrorSpecialKey = "#initerror"
 // applyReplaceOnChanges adjusts a DiffResult returned from a provider to apply the ReplaceOnChange
 // settings in the desired state and initerrors from the previous state.
 func (sg *stepGenerator) applyReplaceOnChanges(diff plugin.DiffResult,
-	replaceOnChangeKeys []resource.PropertyKey, hasInitErrors bool) (plugin.DiffResult, error) {
+	replaceOnChanges []string, hasInitErrors bool) (plugin.DiffResult, error) {
 
 	var err error
 	diffPaths := map[string]resource.PropertyPath{}
@@ -1240,7 +1204,7 @@ func (sg *stepGenerator) applyReplaceOnChanges(diff plugin.DiffResult,
 	}
 
 	var replaceOnChangePaths []resource.PropertyPath
-	for _, p := range replaceOnChangeKeys {
+	for _, p := range replaceOnChanges {
 		path, err := resource.ParsePropertyPath(string(p)) // TODO: p should be a string
 		if err != nil {
 			return diff, err

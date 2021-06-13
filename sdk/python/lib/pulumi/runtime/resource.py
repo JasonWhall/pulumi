@@ -507,7 +507,7 @@ def register_resource(res: 'Resource',
                 aliases=resolver.aliases,
                 supportsPartialValues=True,
                 remote=remote,
-                replaceOnChangeKeys=replace_on_changes,
+                replaceOnChanges=replace_on_changes,
             )
 
             from ..resource import create_urn  # pylint: disable=import-outside-toplevel

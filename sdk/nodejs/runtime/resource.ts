@@ -316,7 +316,7 @@ export function registerResource(res: Resource, t: string, name: string, custom:
         req.setImportid(resop.import || "");
         req.setSupportspartialvalues(true);
         req.setRemote(remote);
-        req.setReplaceonchangekeysList(opts.replaceOnChanges || []);
+        req.setReplaceonchangesList(opts.replaceOnChanges || []);
 
         const customTimeouts = new resproto.RegisterResourceRequest.CustomTimeouts();
         if (opts.customTimeouts != null) {

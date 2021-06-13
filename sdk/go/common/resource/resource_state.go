@@ -43,7 +43,6 @@ type State struct {
 	Aliases                 []URN                 // TODO
 	CustomTimeouts          CustomTimeouts        // A config block that will be used to configure timeouts for CRUD operations
 	ImportID                ID                    // the resource's import id, if this was an imported resource.
-	ReplaceOnChangeKeys     []PropertyKey         // a list of properties that if changed should force a replacement.
 }
 
 // NewState creates a new resource value from existing resource state information.
@@ -52,7 +51,7 @@ func NewState(t tokens.Type, urn URN, custom bool, del bool, id ID,
 	external bool, dependencies []URN, initErrors []string, provider string,
 	propertyDependencies map[PropertyKey][]URN, pendingReplacement bool,
 	additionalSecretOutputs []PropertyKey, aliases []URN, timeouts *CustomTimeouts,
-	importID ID, replaceOnChangeKeys []PropertyKey) *State {
+	importID ID) *State {
 
 	contract.Assertf(t != "", "type was empty")
 	contract.Assertf(custom || id == "", "is custom or had empty ID")
@@ -77,7 +76,6 @@ func NewState(t tokens.Type, urn URN, custom bool, del bool, id ID,
 		AdditionalSecretOutputs: additionalSecretOutputs,
 		Aliases:                 aliases,
 		ImportID:                importID,
-		ReplaceOnChangeKeys:     replaceOnChangeKeys,
 	}
 
 	if timeouts != nil {

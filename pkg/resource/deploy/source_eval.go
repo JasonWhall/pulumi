@@ -757,6 +757,7 @@ func (rm *resmon) RegisterResource(ctx context.Context,
 	protect := req.GetProtect()
 	deleteBeforeReplaceValue := req.GetDeleteBeforeReplace()
 	ignoreChanges := req.GetIgnoreChanges()
+	replaceOnChanges := req.GetReplaceOnChanges()
 	id := resource.ID(req.GetImportId())
 	customTimeouts := req.GetCustomTimeouts()
 
@@ -848,11 +849,6 @@ func (rm *resmon) RegisterResource(ctx context.Context,
 		additionalSecretOutputs = append(additionalSecretOutputs, resource.PropertyKey(name))
 	}
 
-	var replaceOnChangeKeys []resource.PropertyKey
-	for _, name := range req.GetReplaceOnChangeKeys() {
-		replaceOnChangeKeys = append(replaceOnChangeKeys, resource.PropertyKey(name))
-	}
-
 	var timeouts resource.CustomTimeouts
 	if customTimeouts != nil {
 		if customTimeouts.Create != "" {
@@ -886,9 +882,9 @@ func (rm *resmon) RegisterResource(ctx context.Context,
 	logging.V(5).Infof(
 		"ResourceMonitor.RegisterResource received: t=%v, name=%v, custom=%v, #props=%v, parent=%v, protect=%v, "+
 			"provider=%v, deps=%v, deleteBeforeReplace=%v, ignoreChanges=%v, aliases=%v, customTimeouts=%v, "+
-			"providers=%v",
+			"providers=%v, replaceOnChanges=%v",
 		t, name, custom, len(props), parent, protect, providerRef, dependencies, deleteBeforeReplace, ignoreChanges,
-		aliases, timeouts, providerRefs)
+		aliases, timeouts, providerRefs, replaceOnChanges)
 
 	// If this is a remote component, fetch its provider and issue the construct call. Otherwise, register the resource.
 	var result *RegisterResult
@@ -925,7 +921,7 @@ func (rm *resmon) RegisterResource(ctx context.Context,
 		step := &registerResourceEvent{
 			goal: resource.NewGoal(t, name, custom, props, parent, protect, dependencies,
 				providerRef.String(), nil, propertyDependencies, deleteBeforeReplace, ignoreChanges,
-				additionalSecretOutputs, aliases, id, &timeouts, replaceOnChangeKeys),
+				additionalSecretOutputs, aliases, id, &timeouts, replaceOnChanges),
 			done: make(chan *RegisterResult),
 		}
 

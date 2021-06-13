@@ -186,7 +186,7 @@ func (rm *ResourceMonitor) RegisterResource(t tokens.Type, name string, custom b
 		CustomTimeouts:             &timeouts,
 		SupportsPartialValues:      supportsPartialValues,
 		Remote:                     opts.Remote,
-		ReplaceOnChangeKeys:        opts.ReplaceOnChanges,
+		ReplaceOnChanges:           opts.ReplaceOnChanges,
 	}
 
 	// submit request
