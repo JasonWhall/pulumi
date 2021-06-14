@@ -1506,6 +1506,11 @@ func (mod *modContext) genConfig(variables []*schema.Property) (string, error) {
 		fmt.Fprintf(w, "        {\n")
 
 		for _, typ := range mod.types {
+			// Ignore input-shaped types.
+			if typ.IsInputShape() {
+				continue
+			}
+
 			fmt.Fprintf(w, "\n")
 
 			// Open the class.
