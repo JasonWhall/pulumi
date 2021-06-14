@@ -365,6 +365,8 @@ func generatePropertyValue(property *schema.Property, value resource.PropertyVal
 // generateValue generates a value from the given property value. The given type may or may not match the shape of the
 // given value.
 func generateValue(typ schema.Type, value resource.PropertyValue) (model.Expression, error) {
+	typ = codegen.UnwrapType(typ)
+
 	switch {
 	case value.IsArchive():
 		return nil, fmt.Errorf("NYI: archives")
@@ -473,13 +475,27 @@ func generateValue(typ schema.Type, value resource.PropertyValue) (model.Express
 			Args: []model.Expression{arg},
 		}, nil
 	case value.IsString():
-		return &model.TemplateExpression{
+		x := &model.TemplateExpression{
 			Parts: []model.Expression{
 				&model.LiteralValueExpression{
 					Value: cty.StringVal(value.StringValue()),
 				},
 			},
-		}, nil
+		}
+		switch typ {
+		case schema.ArchiveType:
+			return &model.FunctionCallExpression{
+				Name: "fileArchive",
+				Args: []model.Expression{x},
+			}, nil
+		case schema.AssetType:
+			return &model.FunctionCallExpression{
+				Name: "fileAsset",
+				Args: []model.Expression{x},
+			}, nil
+		default:
+			return x, nil
+		}
 	default:
 		contract.Failf("unexpected property value %v", value)
 		return nil, nil

@@ -926,7 +926,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 	const alternateSuffix = "InitArgs"
 	for _, t := range mod.types {
 		if mod.details(t).inputType {
-			if mod.unqualifiedObjectTypeName(t, true, true) == resourceArgsName {
+			if mod.unqualifiedObjectTypeName(t, true) == resourceArgsName {
 				resourceArgsName = name + alternateSuffix
 				break
 			}
@@ -936,7 +936,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 	if strings.HasSuffix(resourceArgsName, alternateSuffix) {
 		for _, t := range mod.types {
 			if mod.details(t).inputType {
-				if mod.unqualifiedObjectTypeName(t, true, true) == resourceArgsName {
+				if mod.unqualifiedObjectTypeName(t, true) == resourceArgsName {
 					return "", errors.Errorf(
 						"resource args class named %s in %s conflicts with input type", resourceArgsName, mod.mod)
 				}

@@ -1869,8 +1869,8 @@ func GeneratePackage(tool string, pkg *schema.Package) (map[string][]byte, error
 }
 
 func visitObjectTypes(properties []*schema.Property, visitor func(t schema.Type)) {
-	codegen.VisitTypeClosure(properties, func(t codegen.Type) {
-		switch st := t.Type.(type) {
+	codegen.VisitTypeClosure(properties, func(t schema.Type) {
+		switch st := t.(type) {
 		case *schema.EnumType, *schema.ObjectType, *schema.ResourceType:
 			visitor(st)
 		}

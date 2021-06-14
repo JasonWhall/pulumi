@@ -300,7 +300,7 @@ The Component resource accepts the following [input]({{< relref "/docs/intro/con
 <a href="#bazmap_go" style="color: inherit; text-decoration: inherit;">Baz<wbr>Map</a>
 </span>
         <span class="property-indicator"></span>
-        <span class="property-type">map[string]Foo</span>
+        <span class="property-type">map[string]Foo<wbr>Args</span>
     </dt>
     <dd>{{% md %}}{{% /md %}}</dd><dt class="property-optional"
             title="Optional">
