@@ -592,7 +592,7 @@ func (g *generator) argumentTypeName(expr model.Expression, destType model.Type,
 
 	if schemaType, ok := hcl2.GetSchemaForType(destType); ok {
 		pkg := &pkgContext{pkg: &schema.Package{Name: "main"}}
-		return pkg.typeString(schemaType)
+		return pkg.argsType(schemaType)
 	}
 
 	//	if _, isInput := schemaType.(*schema.InputType); ok && !isInput {

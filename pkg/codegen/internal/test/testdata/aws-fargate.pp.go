@@ -28,7 +28,7 @@ func main() {
 		}
 		webSecurityGroup, err := ec2.NewSecurityGroup(ctx, "webSecurityGroup", &ec2.SecurityGroupArgs{
 			VpcId: pulumi.String(vpc.Id),
-			Egress: ec2.SecurityGroupEgressArgsArray{
+			Egress: ec2.SecurityGroupEgressArray{
 				&ec2.SecurityGroupEgressArgs{
 					Protocol: pulumi.String("-1"),
 					FromPort: pulumi.Int(0),
@@ -38,7 +38,7 @@ func main() {
 					},
 				},
 			},
-			Ingress: ec2.SecurityGroupIngressArgsArray{
+			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
 					Protocol: pulumi.String("tcp"),
 					FromPort: pulumi.Int(80),
@@ -107,7 +107,7 @@ func main() {
 		webListener, err := elasticloadbalancingv2.NewListener(ctx, "webListener", &elasticloadbalancingv2.ListenerArgs{
 			LoadBalancerArn: webLoadBalancer.Arn,
 			Port:            pulumi.Int(80),
-			DefaultActions: elasticloadbalancingv2.ListenerDefaultActionArgsArray{
+			DefaultActions: elasticloadbalancingv2.ListenerDefaultActionArray{
 				&elasticloadbalancingv2.ListenerDefaultActionArgs{
 					Type:           pulumi.String("forward"),
 					TargetGroupArn: webTargetGroup.Arn,
@@ -160,7 +160,7 @@ func main() {
 					webSecurityGroup.ID(),
 				},
 			},
-			LoadBalancers: ecs.ServiceLoadBalancerArgsArray{
+			LoadBalancers: ecs.ServiceLoadBalancerArray{
 				&ecs.ServiceLoadBalancerArgs{
 					TargetGroupArn: webTargetGroup.Arn,
 					ContainerName:  pulumi.String("my-app"),

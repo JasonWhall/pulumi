@@ -251,16 +251,6 @@ func isNilType(t schema.Type) bool {
 }
 
 func (pkg *pkgContext) inputType(t schema.Type) (result string) {
-	if pkg.pkg.Name == "main" {
-		defer func() {
-			if result == "pulumi.Input" {
-				result = "pulumi.Any"
-			} else {
-				result = strings.TrimSuffix(result, "Input")
-			}
-		}()
-	}
-
 	switch t := codegen.SimplifyInputUnion(t).(type) {
 	case *schema.OptionalType:
 		return pkg.typeString(t)
@@ -276,7 +266,7 @@ func (pkg *pkgContext) inputType(t schema.Type) (result string) {
 		en := pkg.inputType(t.ElementType)
 		return strings.TrimSuffix(en, "Input") + "MapInput"
 	case *schema.ObjectType:
-		if pkg.pkg.Name != "main" && t.IsInputShape() {
+		if t.IsInputShape() {
 			t = t.PlainShape
 		}
 		return pkg.resolveObjectType(t) + "Input"
@@ -322,7 +312,65 @@ func (pkg *pkgContext) inputType(t schema.Type) (result string) {
 	panic(fmt.Errorf("unexpected type %T", t))
 }
 
-func (pkg *pkgContext) typeString(t schema.Type) string {
+func (pkg *pkgContext) argsType(t schema.Type) (result string) {
+	switch t := codegen.SimplifyInputUnion(t).(type) {
+	case *schema.OptionalType:
+		return pkg.typeStringImpl(t, true)
+	case *schema.InputType:
+		return pkg.argsType(t.ElementType)
+	case *schema.EnumType:
+		// Since enum type is itself an input
+		return pkg.tokenToEnum(t.Token)
+	case *schema.ArrayType:
+		en := pkg.argsType(t.ElementType)
+		return strings.TrimSuffix(en, "Args") + "Array"
+	case *schema.MapType:
+		en := pkg.argsType(t.ElementType)
+		return strings.TrimSuffix(en, "Args") + "Map"
+	case *schema.ObjectType:
+		return pkg.resolveObjectType(t)
+	case *schema.ResourceType:
+		return pkg.resolveResourceType(t)
+	case *schema.TokenType:
+		// Use the underlying type for now.
+		if t.UnderlyingType != nil {
+			return pkg.argsType(t.UnderlyingType)
+		}
+		return pkg.tokenToType(t.Token)
+	case *schema.UnionType:
+		// If the union is actually a relaxed enum type, use the underlying
+		// type for the input instead
+		for _, e := range t.ElementTypes {
+			if typ, ok := e.(*schema.EnumType); ok {
+				return pkg.argsType(typ.ElementType)
+			}
+		}
+		return "pulumi.Any"
+	default:
+		switch t {
+		case schema.BoolType:
+			return "pulumi.Bool"
+		case schema.IntType:
+			return "pulumi.Int"
+		case schema.NumberType:
+			return "pulumi.Float64"
+		case schema.StringType:
+			return "pulumi.String"
+		case schema.ArchiveType:
+			return "pulumi.Archive"
+		case schema.AssetType:
+			return "pulumi.AssetOrArchive"
+		case schema.JSONType:
+			fallthrough
+		case schema.AnyType:
+			return "pulumi.Any"
+		}
+	}
+
+	panic(fmt.Errorf("unexpected type %T", t))
+}
+
+func (pkg *pkgContext) typeStringImpl(t schema.Type, argsType bool) string {
 	switch t := t.(type) {
 	case *schema.OptionalType:
 		if input, isInputType := t.ElementType.(*schema.InputType); isInputType {
@@ -333,7 +381,7 @@ func (pkg *pkgContext) typeString(t schema.Type) string {
 			if _, isEnum := input.ElementType.(*schema.EnumType); isEnum {
 				return "*" + elem
 			}
-			if pkg.pkg.Name == "main" {
+			if argsType {
 				return elem + "Ptr"
 			}
 			return strings.TrimSuffix(elem, "Input") + "PtrInput"
@@ -345,6 +393,9 @@ func (pkg *pkgContext) typeString(t schema.Type) string {
 		}
 		return "*" + elementType
 	case *schema.InputType:
+		if argsType {
+			return pkg.argsType(t.ElementType)
+		}
 		return pkg.inputType(t.ElementType)
 	case *schema.EnumType:
 		return pkg.typeString(t.ElementType)
@@ -402,6 +453,10 @@ func (pkg *pkgContext) typeString(t schema.Type) string {
 	}
 
 	panic(fmt.Errorf("unexpected type %T", t))
+}
+
+func (pkg *pkgContext) typeString(t schema.Type) string {
+	return pkg.typeStringImpl(t, false)
 }
 
 func (pkg *pkgContext) isExternalReference(t schema.Type) bool {

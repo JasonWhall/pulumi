@@ -64,7 +64,7 @@ func GetRubberTree(ctx *pulumi.Context,
 
 // Input properties used for looking up and filtering RubberTree resources.
 type rubberTreeState struct {
-	Farm pulumi.StringPtrInput `pulumi:"farm"`
+	Farm *string `pulumi:"farm"`
 }
 
 type RubberTreeState struct {

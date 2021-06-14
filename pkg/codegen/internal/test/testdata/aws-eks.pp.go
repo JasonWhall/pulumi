@@ -36,7 +36,7 @@ func main() {
 		}
 		eksRouteTable, err := ec2.NewRouteTable(ctx, "eksRouteTable", &ec2.RouteTableArgs{
 			VpcId: eksVpc.ID(),
-			Routes: ec2.RouteTableRouteArgsArray{
+			Routes: ec2.RouteTableRouteArray{
 				&ec2.RouteTableRouteArgs{
 					CidrBlock: pulumi.String("0.0.0.0/0"),
 					GatewayId: eksIgw.ID(),
@@ -92,7 +92,7 @@ func main() {
 			Tags: pulumi.StringMap{
 				"Name": pulumi.String("pulumi-cluster-sg"),
 			},
-			Ingress: ec2.SecurityGroupIngressArgsArray{
+			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
 					CidrBlocks: pulumi.StringArray{
 						pulumi.String("0.0.0.0/0"),

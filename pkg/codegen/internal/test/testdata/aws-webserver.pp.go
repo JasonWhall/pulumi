@@ -11,7 +11,7 @@ import (
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		securityGroup, err := ec2.NewSecurityGroup(ctx, "securityGroup", &ec2.SecurityGroupArgs{
-			Ingress: ec2.SecurityGroupIngressArgsArray{
+			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
 					Protocol: pulumi.String("tcp"),
 					FromPort: pulumi.Int(0),
@@ -27,7 +27,7 @@ func main() {
 		}
 		opt0 := true
 		ami, err := aws.GetAmi(ctx, &GetAmiArgs{
-			Filters: []*GetAmiFilter{
+			Filters: GetAmiFilterArray{
 				GetAmiFilter{
 					Name: "name",
 					Values: []string{
