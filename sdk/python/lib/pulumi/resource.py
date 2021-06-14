@@ -520,6 +520,7 @@ class ResourceOptions:
         dest.providers = _merge_lists(dest.providers, source.providers)
         dest.depends_on = _merge_lists(dest.depends_on, source.depends_on)
         dest.ignore_changes = _merge_lists(dest.ignore_changes, source.ignore_changes)
+        dest.replace_on_changes = _merge_lists(dest.replace_on_changes, source.replace_on_changes)
         dest.aliases = _merge_lists(dest.aliases, source.aliases)
         dest.additional_secret_outputs = _merge_lists(dest.additional_secret_outputs, source.additional_secret_outputs)
         dest.transformations = _merge_lists(dest.transformations, source.transformations)
