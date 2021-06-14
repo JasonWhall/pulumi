@@ -17,7 +17,7 @@ from ..util import LanghostTest
 
 class TestReplaceOnChanges(LanghostTest):
     """
-    Tests that Pulumi resources can accept ignore_changes resource options.
+    Tests that Pulumi resources can accept replace_on_changes resource options.
     """
     def test_replace_on_changes(self):
         self.run_test(
@@ -28,7 +28,7 @@ class TestReplaceOnChanges(LanghostTest):
                           _parent, _custom, _protect, _provider, _property_deps, _delete_before_replace,
                           ignore_changes, _version, replace_on_changes):
 
-        self.assertListEqual(replace_on_changes, ["property_a", "property_b"])
+        self.assertListEqual(replace_on_changes, ["foo", "bar"])
 
         return {
             "urn": self.make_urn(ty, name),

@@ -19,11 +19,5 @@ class MyResource(CustomResource):
     def __init__(self, name, opts=None):
         CustomResource.__init__(self, "test:index:MyResource", name, opts=opts)
 
-    def translate_input_property(self, prop: str) -> str:
-        if prop == "replace_on_changes":
-            return "replaceOnChanges"
-        
-        return prop
 
-
-res = MyResource("testResource", opts=ResourceOptions(replace_on_changes=["property_a", "property_b"]))
+res = MyResource("testResource", opts=ResourceOptions(replace_on_changes=["foo", "bar"]))
