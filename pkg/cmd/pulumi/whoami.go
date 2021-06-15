@@ -19,6 +19,7 @@ import (
 
 	"github.com/pulumi/pulumi/pkg/v3/backend/display"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/cmdutil"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -47,9 +48,15 @@ func newWhoAmICmd() *cobra.Command {
 				return err
 			}
 
+			cloudURL, err := workspace.GetCurrentCloudURL()
+			if err != nil {
+				return err
+			}			
+
 			if verbose {
 				fmt.Printf("User: %s\n", name)
-				fmt.Printf("Backend URL: %s\n", b.URL())
+				fmt.Printf("Console URL: %s\n", b.URL())
+				fmt.Printf("Backend URL: %s\n", cloudURL)
 			} else {
 				fmt.Println(name)
 			}
