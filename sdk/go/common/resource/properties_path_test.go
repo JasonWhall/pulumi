@@ -233,11 +233,6 @@ func TestPropertyPathContains(t *testing.T) {
 			true,
 		},
 		{
-			PropertyPath{},
-			PropertyPath{"root"},
-			true,
-		},
-		{
 			PropertyPath{"foo", "bar", 1},
 			PropertyPath{"foo", "bar", 1, "baz"},
 			true,
