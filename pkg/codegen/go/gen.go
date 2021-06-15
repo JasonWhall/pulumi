@@ -405,13 +405,13 @@ func (pkg *pkgContext) typeStringImpl(t schema.Type, argsType bool) string {
 		return pkg.typeStringImpl(t.ElementType, argsType)
 	case *schema.ArrayType:
 		typ := "[]"
-		if pkg.isExternalObjectType(t.ElementType) {
+		if !argsType && pkg.isExternalObjectType(t.ElementType) {
 			typ += "*"
 		}
 		return typ + pkg.typeStringImpl(t.ElementType, argsType)
 	case *schema.MapType:
 		typ := "map[string]"
-		if pkg.isExternalObjectType(t.ElementType) {
+		if !argsType && pkg.isExternalObjectType(t.ElementType) {
 			typ += "*"
 		}
 		return typ + pkg.typeStringImpl(t.ElementType, argsType)
