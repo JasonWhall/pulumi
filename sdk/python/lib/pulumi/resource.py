@@ -332,13 +332,6 @@ class ResourceOptions:
     If provided, ignore changes to any of the specified properties.
     """
 
-    replace_on_changes: Optional[List[str]]
-    """
-    Changes to any of these property paths will force a replacement.  If this list includes `"*"`, changes
-    to any properties will force a replacement.  Initialization errors from previous deployments will
-    require replacement instead of update only if `"*"` is passed.
-    """
-
     version: Optional[str]
     """
     An optional version. If provided, the engine loads a provider with exactly the requested version
@@ -388,6 +381,13 @@ class ResourceOptions:
     The URN of a previously-registered resource of this type to read from the engine.
     """
 
+    replace_on_changes: Optional[List[str]]
+    """
+    Changes to any of these property paths will force a replacement.  If this list includes `"*"`, changes
+    to any properties will force a replacement.  Initialization errors from previous deployments will
+    require replacement instead of update only if `"*"` is passed.
+    """
+
     # pylint: disable=redefined-builtin
     def __init__(self,
                  parent: Optional['Resource'] = None,
@@ -397,7 +397,6 @@ class ResourceOptions:
                  providers: Optional[Union[Mapping[str, 'ProviderResource'], List['ProviderResource']]] = None,
                  delete_before_replace: Optional[bool] = None,
                  ignore_changes: Optional[List[str]] = None,
-                 replace_on_changes: Optional[List[str]] = None,
                  version: Optional[str] = None,
                  aliases: Optional[List['Input[Union[str, Alias]]']] = None,
                  additional_secret_outputs: Optional[List[str]] = None,
@@ -405,7 +404,8 @@ class ResourceOptions:
                  import_: Optional[str] = None,
                  custom_timeouts: Optional['CustomTimeouts'] = None,
                  transformations: Optional[List[ResourceTransformation]] = None,
-                 urn: Optional[str] = None) -> None:
+                 urn: Optional[str] = None,
+                 replace_on_changes: Optional[List[str]] = None) -> None:
         """
         :param Optional[Resource] parent: If provided, the currently-constructing resource should be the child of
                the provided parent resource.
@@ -438,6 +438,9 @@ class ResourceOptions:
         :param Optional[List[ResourceTransformation]] transformations: If provided, a list of transformations to apply
                to this resource during construction.
         :param Optional[str] urn: The URN of a previously-registered resource of this type to read from the engine.
+        :param Optional[List[str]] replace_on_changes: Changes to any of these property paths will force a replacement.
+               If this list includes `"*"`, changes to any properties will force a replacement.  Initialization errors
+               from previous deployments will require replacement instead of update only if `"*"` is passed.
         """
 
         # Expose 'merge' again this this object, but this time as an instance method.
@@ -452,7 +455,6 @@ class ResourceOptions:
         self.providers = providers
         self.delete_before_replace = delete_before_replace
         self.ignore_changes = ignore_changes
-        self.replace_on_changes = replace_on_changes
         self.version = version
         self.aliases = aliases
         self.additional_secret_outputs = additional_secret_outputs
@@ -461,6 +463,7 @@ class ResourceOptions:
         self.import_ = import_
         self.transformations = transformations
         self.urn = urn
+        self.replace_on_changes = replace_on_changes
 
         if depends_on is not None:
             for dep in depends_on:
