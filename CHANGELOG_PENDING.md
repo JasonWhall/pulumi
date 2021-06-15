@@ -20,6 +20,9 @@
 - [sdk/python] - Reduce `log.debug` calls for improved performance
   [#7295](https://github.com/pulumi/pulumi/pull/7295)
 
+- [cli] - Add `pulumi diagnostic environment` command to output information for support
+  [#2715](https://github.com/pulumi/pulumi/issues/2715)
+
 ### Bug Fixes
 
 - [sdk/python] - Fix regression in behaviour for `Output.from_input({})`
