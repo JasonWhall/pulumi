@@ -20,4 +20,4 @@ class MyResource(CustomResource):
         CustomResource.__init__(self, "test:index:MyResource", name, opts=opts)
 
 
-res = MyResource("testResource", opts=ResourceOptions(replace_on_changes=["foo", "bar"]))
+res = MyResource("testResource", opts=ResourceOptions(replace_on_changes=["a", "b"]))
