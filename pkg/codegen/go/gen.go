@@ -312,20 +312,20 @@ func (pkg *pkgContext) inputType(t schema.Type) (result string) {
 	panic(fmt.Errorf("unexpected type %T", t))
 }
 
-func (pkg *pkgContext) argsType(t schema.Type) (result string) {
+func (pkg *pkgContext) argsTypeImpl(t schema.Type) (result string) {
 	switch t := codegen.SimplifyInputUnion(t).(type) {
 	case *schema.OptionalType:
 		return pkg.typeStringImpl(t, true)
 	case *schema.InputType:
-		return pkg.argsType(t.ElementType)
+		return pkg.argsTypeImpl(t.ElementType)
 	case *schema.EnumType:
 		// Since enum type is itself an input
 		return pkg.tokenToEnum(t.Token)
 	case *schema.ArrayType:
-		en := pkg.argsType(t.ElementType)
+		en := pkg.argsTypeImpl(t.ElementType)
 		return strings.TrimSuffix(en, "Args") + "Array"
 	case *schema.MapType:
-		en := pkg.argsType(t.ElementType)
+		en := pkg.argsTypeImpl(t.ElementType)
 		return strings.TrimSuffix(en, "Args") + "Map"
 	case *schema.ObjectType:
 		return pkg.resolveObjectType(t)
@@ -334,7 +334,7 @@ func (pkg *pkgContext) argsType(t schema.Type) (result string) {
 	case *schema.TokenType:
 		// Use the underlying type for now.
 		if t.UnderlyingType != nil {
-			return pkg.argsType(t.UnderlyingType)
+			return pkg.argsTypeImpl(t.UnderlyingType)
 		}
 		return pkg.tokenToType(t.Token)
 	case *schema.UnionType:
@@ -342,7 +342,7 @@ func (pkg *pkgContext) argsType(t schema.Type) (result string) {
 		// type for the input instead
 		for _, e := range t.ElementTypes {
 			if typ, ok := e.(*schema.EnumType); ok {
-				return pkg.argsType(typ.ElementType)
+				return pkg.argsTypeImpl(typ.ElementType)
 			}
 		}
 		return "pulumi.Any"
@@ -370,6 +370,10 @@ func (pkg *pkgContext) argsType(t schema.Type) (result string) {
 	panic(fmt.Errorf("unexpected type %T", t))
 }
 
+func (pkg *pkgContext) argsType(t schema.Type) string {
+	return pkg.typeStringImpl(t, true)
+}
+
 func (pkg *pkgContext) typeStringImpl(t schema.Type, argsType bool) string {
 	switch t := t.(type) {
 	case *schema.OptionalType:
@@ -387,30 +391,30 @@ func (pkg *pkgContext) typeStringImpl(t schema.Type, argsType bool) string {
 			return strings.TrimSuffix(elem, "Input") + "PtrInput"
 		}
 
-		elementType := pkg.typeString(t.ElementType)
+		elementType := pkg.typeStringImpl(t.ElementType, argsType)
 		if isNilType(t.ElementType) {
 			return elementType
 		}
 		return "*" + elementType
 	case *schema.InputType:
 		if argsType {
-			return pkg.argsType(t.ElementType)
+			return pkg.argsTypeImpl(t.ElementType)
 		}
 		return pkg.inputType(t.ElementType)
 	case *schema.EnumType:
-		return pkg.typeString(t.ElementType)
+		return pkg.typeStringImpl(t.ElementType, argsType)
 	case *schema.ArrayType:
 		typ := "[]"
 		if pkg.isExternalObjectType(t.ElementType) {
 			typ += "*"
 		}
-		return typ + pkg.typeString(t.ElementType)
+		return typ + pkg.typeStringImpl(t.ElementType, argsType)
 	case *schema.MapType:
 		typ := "map[string]"
 		if pkg.isExternalObjectType(t.ElementType) {
 			typ += "*"
 		}
-		return typ + pkg.typeString(t.ElementType)
+		return typ + pkg.typeStringImpl(t.ElementType, argsType)
 	case *schema.ObjectType:
 		return pkg.resolveObjectType(t)
 	case *schema.ResourceType:
@@ -418,7 +422,7 @@ func (pkg *pkgContext) typeStringImpl(t schema.Type, argsType bool) string {
 	case *schema.TokenType:
 		// Use the underlying type for now.
 		if t.UnderlyingType != nil {
-			return pkg.typeString(t.UnderlyingType)
+			return pkg.typeStringImpl(t.UnderlyingType, argsType)
 		}
 		return pkg.tokenToType(t.Token)
 	case *schema.UnionType:
@@ -426,7 +430,7 @@ func (pkg *pkgContext) typeStringImpl(t schema.Type, argsType bool) string {
 		// type for the enum instead
 		for _, e := range t.ElementTypes {
 			if typ, ok := e.(*schema.EnumType); ok {
-				return pkg.typeString(typ.ElementType)
+				return pkg.typeStringImpl(typ.ElementType, argsType)
 			}
 		}
 		// TODO(pdg): union types

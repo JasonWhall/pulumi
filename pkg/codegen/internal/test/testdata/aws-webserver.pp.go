@@ -27,7 +27,7 @@ func main() {
 		}
 		opt0 := true
 		ami, err := aws.GetAmi(ctx, &GetAmiArgs{
-			Filters: GetAmiFilterArray{
+			Filters: []*GetAmiFilter{
 				GetAmiFilter{
 					Name: "name",
 					Values: []string{
