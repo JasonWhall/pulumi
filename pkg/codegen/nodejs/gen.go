@@ -1034,7 +1034,7 @@ func (mod *modContext) genConfig(w io.Writer, variables []*schema.Property) erro
 		}
 
 		fmt.Fprintf(w, "export let %s: %s = %s;\n",
-			p.Name, mod.typeString(codegen.RequiredType(p), false, nil), configFetch)
+			p.Name, mod.typeString(codegen.OptionalType(p), false, nil), configFetch)
 	}
 
 	return nil
