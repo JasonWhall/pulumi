@@ -2213,7 +2213,7 @@ func (x *TemplateExpression) print(w io.Writer, p *printer) {
 
 	// Print the expressions.
 	for _, part := range x.Parts {
-		if lit, ok := part.(*LiteralValueExpression); ok && lit.Type() == StringType {
+		if lit, ok := part.(*LiteralValueExpression); ok && StringType.AssignableFrom(lit.Type()) {
 			lit.printLit(w, p, !isHeredoc)
 		} else {
 			p.fprintf(w, "%v", part)
