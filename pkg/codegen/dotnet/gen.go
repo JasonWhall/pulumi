@@ -300,13 +300,18 @@ func (mod *modContext) typeString(t schema.Type, qualifier string, input, state,
 			inputType, elem = "InputList", codegen.UnwrapType(e.ElementType)
 		case *schema.MapType:
 			inputType, elem = "InputMap", codegen.UnwrapType(e.ElementType)
-		case *schema.UnionType:
-			e = codegen.SimplifyInputUnion(e).(*schema.UnionType)
-			return mod.unionTypeString(e, qualifier, input, true, state, requireInitializers)
 		default:
 			if e == schema.JSONType {
 				return "InputJson"
 			}
+		}
+
+		if union, ok := elem.(*schema.UnionType); ok {
+			union = codegen.SimplifyInputUnion(union).(*schema.UnionType)
+			if inputType == "Input" {
+				return mod.unionTypeString(union, qualifier, input, true, state, requireInitializers)
+			}
+			elem = union
 		}
 		return fmt.Sprintf("%s<%s>", inputType, mod.typeString(elem, qualifier, input, state, requireInitializers))
 	case *schema.EnumType:
