@@ -1528,7 +1528,7 @@ func (mod *modContext) genConfig(variables []*schema.Property) (string, error) {
 				typ := mod.typeString(prop.Type, "Types", false, false, false)
 
 				initializer := ""
-				if !prop.IsRequired() && !isValueType(prop.Type) && !isImmutableArrayType(prop.Type, false) {
+				if !prop.IsRequired() && !isValueType(prop.Type) && !isImmutableArrayType(codegen.UnwrapType(prop.Type), false) {
 					initializer = " = null!;"
 				}
 
