@@ -379,7 +379,7 @@ func (pkg *pkgContext) typeStringImpl(t schema.Type, argsType bool) string {
 	case *schema.OptionalType:
 		if input, isInputType := t.ElementType.(*schema.InputType); isInputType {
 			elem := pkg.inputType(input.ElementType)
-			if isNilType(input.ElementType) {
+			if isNilType(input.ElementType) || elem == "pulumi.Input" {
 				return elem
 			}
 			if _, isEnum := input.ElementType.(*schema.EnumType); isEnum {
@@ -392,7 +392,7 @@ func (pkg *pkgContext) typeStringImpl(t schema.Type, argsType bool) string {
 		}
 
 		elementType := pkg.typeStringImpl(t.ElementType, argsType)
-		if isNilType(t.ElementType) {
+		if isNilType(t.ElementType) || elementType == "interface{}" {
 			return elementType
 		}
 		return "*" + elementType
@@ -538,7 +538,7 @@ func (pkg *pkgContext) outputType(t schema.Type) string {
 	switch t := t.(type) {
 	case *schema.OptionalType:
 		elem := pkg.outputType(t.ElementType)
-		if isNilType(t.ElementType) {
+		if isNilType(t.ElementType) || elem == "pulumi.AnyOutput" {
 			return elem
 		}
 		return strings.TrimSuffix(elem, "Output") + "PtrOutput"
