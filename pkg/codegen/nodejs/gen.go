@@ -584,7 +584,7 @@ func (mod *modContext) genResource(w io.Writer, r *schema.Resource) error {
 				arg = cv
 			} else {
 				if prop.DefaultValue != nil {
-					dv, err := mod.getDefaultValue(prop.DefaultValue, prop.Type)
+					dv, err := mod.getDefaultValue(prop.DefaultValue, codegen.UnwrapType(prop.Type))
 					if err != nil {
 						return err
 					}
@@ -1025,7 +1025,7 @@ func (mod *modContext) genConfig(w io.Writer, variables []*schema.Property) erro
 		configFetch := fmt.Sprintf("%s__config.%s(\"%s\")", cast, getfunc, p.Name)
 		// TODO: handle ConstValues https://github.com/pulumi/pulumi/issues/4755
 		if p.DefaultValue != nil {
-			v, err := mod.getDefaultValue(p.DefaultValue, p.Type)
+			v, err := mod.getDefaultValue(p.DefaultValue, codegen.UnwrapType(p.Type))
 			if err != nil {
 				return err
 			}

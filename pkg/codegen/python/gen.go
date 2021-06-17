@@ -745,7 +745,7 @@ func (mod *modContext) genConfig(variables []*schema.Property) (string, error) {
 	for _, p := range variables {
 		configFetch := fmt.Sprintf("__config__.get('%s')", p.Name)
 		if p.DefaultValue != nil {
-			v, err := getDefaultValue(p.DefaultValue, p.Type)
+			v, err := getDefaultValue(p.DefaultValue, codegen.UnwrapType(p.Type))
 			if err != nil {
 				return "", err
 			}
@@ -1078,7 +1078,7 @@ func (mod *modContext) genResource(res *schema.Resource) (string, error) {
 
 		// Fill in computed defaults for arguments.
 		if prop.DefaultValue != nil {
-			dv, err := getDefaultValue(prop.DefaultValue, prop.Type)
+			dv, err := getDefaultValue(prop.DefaultValue, codegen.UnwrapType(prop.Type))
 			if err != nil {
 				return "", err
 			}
@@ -2116,7 +2116,7 @@ func (mod *modContext) genType(w io.Writer, name, comment string, properties []*
 
 		// Fill in computed defaults for arguments.
 		if prop.DefaultValue != nil {
-			dv, err := getDefaultValue(prop.DefaultValue, prop.Type)
+			dv, err := getDefaultValue(prop.DefaultValue, codegen.UnwrapType(prop.Type))
 			if err != nil {
 				return err
 			}

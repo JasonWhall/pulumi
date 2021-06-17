@@ -1249,7 +1249,7 @@ func (pkg *pkgContext) genResource(w io.Writer, r *schema.Resource, generateReso
 			fmt.Fprintf(w, "\targs.%s = %s(%s)\n", Title(p.Name), t, v)
 		}
 		if p.DefaultValue != nil {
-			v, err := pkg.getDefaultValue(p.DefaultValue, p.Type)
+			v, err := pkg.getDefaultValue(p.DefaultValue, codegen.UnwrapType(p.Type))
 			if err != nil {
 				return err
 			}
