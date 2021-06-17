@@ -1983,6 +1983,8 @@ func (mod *modContext) pyType(typ schema.Type) string {
 }
 
 func isStringType(t schema.Type) bool {
+	t = codegen.UnwrapType(t)
+
 	for tt, ok := t.(*schema.TokenType); ok; tt, ok = t.(*schema.TokenType) {
 		t = tt.UnderlyingType
 	}
