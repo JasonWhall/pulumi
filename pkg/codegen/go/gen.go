@@ -1904,7 +1904,7 @@ func (pkg *pkgContext) genConfig(w io.Writer, variables []*schema.Property) erro
 
 		var getType string
 		var funcType string
-		switch p.Type {
+		switch codegen.UnwrapType(p.Type) {
 		case schema.BoolType:
 			getType, funcType = "bool", "Bool"
 		case schema.IntType:
@@ -1920,7 +1920,7 @@ func (pkg *pkgContext) genConfig(w io.Writer, variables []*schema.Property) erro
 
 		fmt.Fprintf(w, "func Get%s(ctx *pulumi.Context) %s {\n", Title(p.Name), getType)
 		if p.DefaultValue != nil {
-			defaultValue, err := pkg.getDefaultValue(p.DefaultValue, p.Type)
+			defaultValue, err := pkg.getDefaultValue(p.DefaultValue, codegen.UnwrapType(p.Type))
 			if err != nil {
 				return err
 			}
