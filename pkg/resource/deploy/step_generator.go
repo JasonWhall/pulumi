@@ -1219,12 +1219,17 @@ func (sg *stepGenerator) applyReplaceOnChanges(diff plugin.DiffResult,
 		if err != nil {
 			return diff, err
 		}
+		changeToReplace := false
 		for _, replaceOnChangePath := range replaceOnChangePaths {
 			if replaceOnChangePath.Contains(diffPath) {
-				v = v.ToReplace()
+				changeToReplace = true
+				break
 			}
-			modifiedDiff[p] = v
 		}
+		if changeToReplace {
+			v = v.ToReplace()
+		}
+		modifiedDiff[p] = v
 	}
 
 	// Calculate the new ReplaceKeys
