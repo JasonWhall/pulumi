@@ -462,9 +462,10 @@ func (pt *plainType) genInputProperty(w io.Writer, prop *schema.Property, indent
 	}
 	if pt.res != nil && pt.res.IsProvider {
 		json := true
-		if prop.Type == schema.StringType {
+		typ := codegen.UnwrapType(prop.Type)
+		if typ == schema.StringType {
 			json = false
-		} else if t, ok := prop.Type.(*schema.TokenType); ok && t.UnderlyingType == schema.StringType {
+		} else if t, ok := typ.(*schema.TokenType); ok && t.UnderlyingType == schema.StringType {
 			json = false
 		}
 		if json {
