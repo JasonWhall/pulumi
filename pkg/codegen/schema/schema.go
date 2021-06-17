@@ -1860,12 +1860,13 @@ func bindProvider(pkgName string, spec ResourceSpec, types *types,
 	// strings, or types with an underlying type of string, before we generate the provider code.
 	var stringProperties []*Property
 	for _, prop := range res.Properties {
-		if tokenType, isTokenType := prop.Type.(*TokenType); isTokenType {
+		typ := plainType(prop.Type)
+		if tokenType, isTokenType := typ.(*TokenType); isTokenType {
 			if tokenType.UnderlyingType != stringType {
 				continue
 			}
 		} else {
-			if prop.Type != stringType {
+			if typ != stringType {
 				continue
 			}
 		}
