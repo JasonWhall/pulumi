@@ -28,6 +28,7 @@ import (
 	resourceanalyzer "github.com/pulumi/pulumi/pkg/v3/resource/analyzer"
 	"github.com/pulumi/pulumi/pkg/v3/resource/autonaming"
 	"github.com/pulumi/pulumi/pkg/v3/resource/deploy"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/constant"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/diag"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
@@ -251,23 +252,32 @@ func installPlugins(
 	//
 	// In order to get a complete view of the set of plugins that we need for an update or query, we must
 	// consult both sources and merge their results into a list of plugins.
-	runtime := proj.Runtime.Name()
-	programInfo := plugin.NewProgramInfo(
-		/* rootDirectory */ plugctx.Root,
-		/* programDirectory */ pwd,
-		/* entryPoint */ main,
-		/* options */ proj.Runtime.Options(),
-	)
-	languagePackages, err := gatherPackagesFromProgram(plugctx, runtime, programInfo)
-	if err != nil {
-		return nil, nil, err
+
+	var programPackages PackageSet
+	if plugctx.Root != "" && opts.ExecKind != constant.ExecKindAutoInline {
+		runtime := proj.Runtime.Name()
+		programInfo := plugin.NewProgramInfo(
+			/* rootDirectory */ plugctx.Root,
+			/* programDirectory */ pwd,
+			/* entryPoint */ main,
+			/* options */ proj.Runtime.Options(),
+		)
+
+		var err error
+		programPackages, err = gatherPackagesFromProgram(plugctx, runtime, programInfo)
+		if err != nil {
+			programPackages = NewPackageSet()
+		}
+	} else {
+		programPackages = NewPackageSet()
 	}
+
 	snapshotPackages, err := gatherPackagesFromSnapshot(plugctx, target)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	allPackages := languagePackages.Union(snapshotPackages)
+	allPackages := programPackages.Union(snapshotPackages)
 	allPlugins := allPackages.ToPluginSet().Deduplicate()
 
 	// If there are any plugins that are not available, we can attempt to install them here.
@@ -284,7 +294,7 @@ func installPlugins(
 	}
 
 	// Collect the version information for default providers.
-	defaultProviderVersions := computeDefaultProviderPackages(languagePackages, allPackages)
+	defaultProviderVersions := computeDefaultProviderPackages(programPackages, allPackages)
 
 	return allPlugins, defaultProviderVersions, nil
 }

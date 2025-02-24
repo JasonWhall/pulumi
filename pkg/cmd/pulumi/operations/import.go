@@ -962,6 +962,7 @@ func NewImportCmd() *cobra.Command {
 				UseLegacyDiff:        env.EnableLegacyDiff.Value(),
 				UseLegacyRefreshDiff: env.EnableLegacyRefreshDiff.Value(),
 				Experimental:         env.Experimental.Value(),
+				ExecKind:             execKind,
 			}
 
 			_, err = s.Import(ctx, backend.UpdateOperation{
